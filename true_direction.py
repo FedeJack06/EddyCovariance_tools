@@ -1,7 +1,9 @@
 import pandas as pd
 import os
+import numpy as np
+import matplotlib.pyplot as plt
 
-data_path = '../26428/'
+data_path = '../6551/'
 
 #Sort filename from folder
 files = sorted([f for f in os.listdir(data_path) if f.startswith('TOA5_Sonic') and f.endswith('.dat')])
@@ -23,7 +25,6 @@ for file in files:
 
         #calculate the number of vertical level in the file
         number_of_level = int((df.shape[1]-2)/6)
-        print(number_of_level)
 
         # header:
         #"TIMESTAMP","RECORD","u_1","v_1","w_1","Ts_1","SS_1","ChkSumF_1","u_2","v_2","w_2","Ts_2","SS_2","ChkSumF_2"
@@ -66,5 +67,31 @@ if df_list:
     print(all_df)
 else:
     print("\nNessun file elaborato con successo. Il DataFrame finale è vuoto.")
-    df_finale = pd.DataFrame() # Crea un df vuoto di fallback
+    all_df = pd.DataFrame() # Crea un df vuoto di fallback
 
+#set datetime as df index
+all_df.set_index('TIMESTAMP', inplace=True)
+
+# average of u_1 e v_1 over 5 min ('5min' or '5T')
+df_5min = all_df[['u_1', 'v_1']].resample('5min').mean()
+
+# sonic coordinate system
+# u > 0: to Nord
+# v > 0: to West
+#WIND TO:
+#df_5min['wind_dir_deg'] = (np.degrees(np.arctan2(-df_5min['v_1'], df_5min['u_1']))) % 360
+# WIND FROM:
+df_5min['wind_dir_deg'] = (np.degrees(np.arctan2(df_5min['v_1'], -df_5min['u_1']))) % 360
+
+# wind speed
+df_5min['wind_speed_m_s'] = np.sqrt(df_5min['u_1']**2 + df_5min['v_1']**2)
+
+# reset index
+df_5min.reset_index(inplace=True)
+
+# Mostra i primi risultati
+print(df_5min)
+
+plt.figure(1)
+plt.plot(df_5min['TIMESTAMP'], df_5min['wind_dir_deg'])
+plt.show()
