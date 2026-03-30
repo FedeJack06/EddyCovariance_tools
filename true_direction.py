@@ -83,7 +83,7 @@ def load_and_merge_sonic_data(folder_path):
         print("\nNessun file elaborato con successo. Il DataFrame finale è vuoto.")
         return pd.DataFrame()
 
-def wind_dir(df):
+def wind_dir(df, min_avg):
     _df = df.copy()
     number_of_level = int((_df.shape[1]-2)/6)
     
@@ -96,7 +96,7 @@ def wind_dir(df):
         col_wind_name.append(f'v_{i+1}')
 
     # average of u_1 e v_1 over 5 min ('5min' or '5T')
-    df_5min = _df[col_wind_name].resample('5min').mean()
+    df_5min = _df[col_wind_name].resample(f'{min_avg}min').mean()
 
     # sonic coordinate system
     # u > 0: to Nord
@@ -121,23 +121,31 @@ def wind_dir(df):
     df_5min.reset_index(inplace=True)
     return df_5min
 
-df_6551 = load_and_merge_sonic_data('../6551/')
-df_26458 = load_and_merge_sonic_data('../26458/')
-df_26428 = load_and_merge_sonic_data('../26428/')
+event = "2026-03-26"
+avg_min = 5
+
+df_6551 = load_and_merge_sonic_data('../'+event+'/6551/')
+df_26458 = load_and_merge_sonic_data('../'+event+'/26458/')
+df_26428 = load_and_merge_sonic_data('../'+event+'/26428/')
+df_4175 = load_and_merge_sonic_data('../'+event+'/4175/')
 
 print(df_6551.u_1.max())
 print(df_6551.v_1.max())
 
-df_6551_avg = wind_dir(df_6551)
-df_26458_avg = wind_dir(df_26458)
-df_26428_avg = wind_dir(df_26428)
-print(type(df_6551_avg['TIMESTAMP']))
+df_6551_avg = wind_dir(df_6551, avg_min)
+df_26458_avg = wind_dir(df_26458, avg_min)
+df_26428_avg = wind_dir(df_26428, avg_min)
+df_4175_avg = wind_dir(df_4175, avg_min)
+#print(type(df_6551_avg['TIMESTAMP']))
 
 plt.figure(1)
 plt.plot(df_6551_avg['TIMESTAMP'], df_6551_avg['wind_dir_1'], label="Medica")
 plt.plot(df_26428_avg['TIMESTAMP'], df_26428_avg['wind_dir_1'], label ="Chirurgica")
-plt.plot(df_26458_avg['TIMESTAMP'], df_26458_avg['wind_dir_1'], label = "E1")
-plt.plot(df_26458_avg['TIMESTAMP'], df_26458_avg['wind_dir_2'], label = "E2")
+plt.plot(df_26458_avg['TIMESTAMP'], df_26458_avg['wind_dir_1'], label = "E1 (1.5m)")
+plt.plot(df_26458_avg['TIMESTAMP'], df_26458_avg['wind_dir_2'], label = "E2 (2.5m)")
+plt.plot(df_4175_avg['TIMESTAMP'], df_4175_avg['wind_dir_1'], label = "Scuola")
+plt.title(f"Wind direction for {event}. {avg_min} min average")
+plt.grid()
 plt.legend()
 
 plt.figure(2)
@@ -145,6 +153,9 @@ plt.plot(df_6551_avg['TIMESTAMP'], df_6551_avg['wind_speed_1'], label="Medica")
 plt.plot(df_26428_avg['TIMESTAMP'], df_26428_avg['wind_speed_1'], label ="Chirurgica")
 plt.plot(df_26458_avg['TIMESTAMP'], df_26458_avg['wind_speed_1'], label = "E1")
 plt.plot(df_26458_avg['TIMESTAMP'], df_26458_avg['wind_speed_2'], label = "E2")
+plt.plot(df_4175_avg['TIMESTAMP'], df_4175_avg['wind_speed_1'], label = "Scuola")
+plt.title(f"Wind speed for {event}. {avg_min} min average")
+plt.grid()
 plt.legend()
 
 plt.show()
