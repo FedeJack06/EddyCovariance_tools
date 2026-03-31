@@ -121,6 +121,37 @@ def wind_dir(df, min_avg):
     df_5min.reset_index(inplace=True)
     return df_5min
 
+def max_rolling_speed(df, sec_avg):
+    _df = df.copy()
+    
+    # 1. Imposta e formatta il TIMESTAMP come indice se non lo è già
+    if 'TIMESTAMP' in _df.columns:
+        _df['TIMESTAMP'] = pd.to_datetime(_df['TIMESTAMP'])
+        _df.set_index('TIMESTAMP', inplace=True)
+    elif not isinstance(_df.index, pd.DatetimeIndex):
+        raise ValueError("L'indice del DataFrame deve essere di tipo DatetimeIndex per usare una finestra temporale in secondi.")
+
+    # Trova dinamicamente i livelli disponibili (es. '1', '2') guardando le colonne u_
+    levels = [col.split('_')[1] for col in _df.columns if col.startswith('u_')]
+    
+    max_gusts = {}
+    
+    for level in levels:
+        u_col = f'u_{level}'
+        v_col = f'v_{level}'
+        
+        if u_col in _df.columns and v_col in _df.columns:
+            # 2. Calcolo del modulo della velocità sui valori grezzi
+            raw_speed = np.sqrt(_df[u_col]**2 + _df[v_col]**2)
+            
+            # 3. Media mobile a 1 secondo e ricerca del massimo
+            # Il parametro '1s' raggruppa dinamicamente i campioni in finestre di 1 secondo esatto
+            max_1s_speed = raw_speed.rolling(f'{sec_avg}s').mean().max()
+            
+            max_gusts[f'max_speed_1s_L{level}'] = max_1s_speed
+            
+    return max_gusts
+
 event = "2026-03-26"
 avg_min = 5
 
@@ -137,6 +168,14 @@ df_26458_avg = wind_dir(df_26458, avg_min)
 df_26428_avg = wind_dir(df_26428, avg_min)
 df_4175_avg = wind_dir(df_4175, avg_min)
 #print(type(df_6551_avg['TIMESTAMP']))
+
+max_medica = max_rolling_speed(df_6551, 1)['max_speed_1s_L1']
+max_chirurgica = max_rolling_speed(df_26428, 1)['max_speed_1s_L1']
+max_E1 = max_rolling_speed(df_26458, 1)['max_speed_1s_L1']
+max_E2 = max_rolling_speed(df_26458, 1)['max_speed_1s_L2']
+max_scuola = max_rolling_speed(df_4175, 1)['max_speed_1s_L1']
+
+testo_statistiche = f"max running avg 1s\n medica: {round(max_medica,1)}\nchirurgica: {round(max_chirurgica,1)}\nE1: {round(max_E1,1)}\nE2: {round(max_E2,1)}\nScuola: {round(max_scuola,1)}"
 
 plt.figure(1)
 plt.plot(df_6551_avg['TIMESTAMP'], df_6551_avg['wind_dir_1'], label="Medica")
@@ -155,6 +194,12 @@ plt.plot(df_26458_avg['TIMESTAMP'], df_26458_avg['wind_speed_1'], label = "E1")
 plt.plot(df_26458_avg['TIMESTAMP'], df_26458_avg['wind_speed_2'], label = "E2")
 plt.plot(df_4175_avg['TIMESTAMP'], df_4175_avg['wind_speed_1'], label = "Scuola")
 plt.title(f"Wind speed for {event}. {avg_min} min average")
+plt.text(0.5, 0.95, testo_statistiche, 
+         transform=plt.gca().transAxes,  # Usa le coordinate relative del riquadro del grafico (da 0 a 1)
+         fontsize=10,
+         ha='center',   # Allineamento orizzontale (horizontal alignment) al centro rispetto a x=0.5
+         va='top',      # Allineamento verticale (vertical alignment) in alto rispetto a y=0.95
+         bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8, edgecolor='gray')) # Sfondo per renderlo leggibile sopra le linee
 plt.grid()
 plt.legend()
 
