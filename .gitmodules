@@ -1,0 +1,3 @@
+[submodule "tob3-py-converter/campbell"]
+	path = tob3-py-converter/campbell
+	url = https://github.com/spirrobe/campbell.git
