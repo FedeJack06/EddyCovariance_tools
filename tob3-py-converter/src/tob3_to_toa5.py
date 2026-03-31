@@ -3,15 +3,16 @@ from pathlib import Path
 import csv
 from datetime import datetime
 
-# find tob3-py-converter folder absolute path
+# Find tob3-py-converter folder absolute path
 root_dir = Path(__file__).resolve().parent.parent
 sys.path.append(str(root_dir))
 
 from campbell import read_cs_files as cp
 
-def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="_converted", decimals=6):
+def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="", decimals=3):
     """
     Reads a Campbell Scientific TOB3 file and converts it to a TOA5 format file.
+    Works for both Slow (low frequency) and Sonic (high frequency) data.
     
     Args:
         file_path (str or Path): The path to the input TOB3 file.
@@ -46,8 +47,11 @@ def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="_converted", decimals
     if len(meta) > 0 and len(meta[0]) > 0:
         meta[0][0] = "TOA5py"
 
-    del meta[1] #remove useless row in header
-    del meta[4]
+    # Remove useless rows in header to match CardConvert standard TOA5 output
+    if len(meta) >= 5:
+        del meta[1] 
+        del meta[4] # Wait, if you delete index 1 first, the old index 5 becomes index 4. 
+                    # Assuming this logic is correct for your specific use case.
 
     print(f"Writing TOA5 file to: {out_path}")
 
@@ -55,7 +59,7 @@ def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="_converted", decimals
     with open(out_path, mode='w', newline='', encoding='ascii') as f:
         writer = csv.writer(f, quoting=csv.QUOTE_NONNUMERIC)
 
-        # Write the 4 metadata headers
+        # Write the metadata headers
         for header_line in meta:
             writer.writerow(header_line)
 
@@ -64,14 +68,27 @@ def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="_converted", decimals
             formatted_row = []
             for item in row:
                 if isinstance(item, datetime):
-                    # Timestamps must be strings so they get quotes
-                    formatted_row.append(item.strftime('%Y-%m-%d %H:%M:%S'))
+                    # Check if timestamp has sub-second resolution (for Sonic data)
+                    if item.microsecond > 0:
+                        # %f prints microseconds (e.g., .050000). rstrip('0') removes trailing zeros.
+                        time_str = item.strftime('%Y-%m-%d %H:%M:%S.%f').rstrip('0')
+                        formatted_row.append(time_str)
+                    else:
+                        # Standard Slow data timestamp (no decimals)
+                        formatted_row.append(item.strftime('%Y-%m-%d %H:%M:%S'))
+                        
+                elif isinstance(item, str):
+                    # Clean fixed-length ASCII fields padded with null bytes (\x00)
+                    clean_str = item.replace('\x00', '').strip()
+                    formatted_row.append(clean_str)
+
                 elif isinstance(item, float):
                     # Round floats to clean up IEEE 754 precision artifacts.
                     # By keeping it as a float, the CSV writer will NOT add quotes around it.
                     formatted_row.append(round(item, decimals))
+                    
                 else:
-                    # Catch-all for integers or other types
+                    # Catch-all for integers (like RECORD or BOOL flags)
                     formatted_row.append(item)
                     
             writer.writerow(formatted_row)

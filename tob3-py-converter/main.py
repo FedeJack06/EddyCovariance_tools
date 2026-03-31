@@ -1,10 +1,10 @@
 from src import tob3_to_toa5 as tt
 from campbell import read_cs_files as cp
 
-file_path = 'data-example/Slow_2026-03-26_00-01-34.dat'
+file_path = 'data-example/Sonic_2026-03-26_00-03-23.dat'
 
 # read file raw from campbell datalogger
-data, meta = cp.read_cs_files(file_path, quiet= False, bycol=True)
+data, meta = cp.read_cs_files(file_path, quiet= False, bycol=False)
 
 # print META data, file header
 for i in meta:
