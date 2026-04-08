@@ -49,6 +49,8 @@ def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="", decimals=3):
 
     # Remove useless rows in header to match CardConvert standard TOA5 output
     if len(meta) >= 5:
+        meta[0].extend(meta[1]) #merge two row into one
+        meta[0][7], meta[0][8] = meta[0][8], meta[0][7] #switch two element position to match Card Converter output
         del meta[1] 
         del meta[4] # Wait, if you delete index 1 first, the old index 5 becomes index 4. 
                     # Assuming this logic is correct for your specific use case.
