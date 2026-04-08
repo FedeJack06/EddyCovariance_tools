@@ -15,8 +15,10 @@ if not os.path.exists(file_da_convertire):
     sys.exit(1)
 
 print(f"Inizio la routine per: {file_da_convertire}")
-print(cartella_parente)
+
+dest_folder = cartella_parente+'/conv'
+
 # ROUTINE
 
-#result = tt.tob3toa5(file_path=file_da_convertire, out_dir=path)
-#print(result)
+result = tt.tob3toa5(file_path=file_da_convertire, out_dir=dest_folder)
+print(result)
