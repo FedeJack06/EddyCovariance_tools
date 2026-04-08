@@ -4,10 +4,14 @@ from tob3_py_converter.src import tob3_to_toa5 as tt
 out_path = "./data"
 
 ############# TOB3 TO TOA5
-path_file = "data/Slow_2026-03-26_00-01-34.dat"
+'''path_file = "data/Slow_2026-03-26_00-01-34.dat"
 
 result = tt.tob3toa5(file_path=path_file, out_dir=out_path)
-print(result)
+print(result)'''
+
+############# Check folder
+
+pp.chech_TOA5('../2026-03-26/26458', dt_max_ms=1000, start_name="TOA5_Slow", end_name=".dat", out_file=True)
 
 ############# Despike
 #path_file = "data/TOA5py_Sonic_2026-03-26_00-03-23.dat"

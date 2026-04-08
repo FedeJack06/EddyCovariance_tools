@@ -102,33 +102,36 @@ def chech_TOA5 (input_dir : str,
             
             # Comparison between last timestamo in previous file and first timestamp of current file
             if last_row_prev_file is not None:
-                ts_prev = last_row_prev_file.index.iloc[0]
-                ts_first = df.index.iloc[0]
+                ts_prev = last_row_prev_file.index[0]
+                ts_first = df.index[0]
                 
                 if pd.notna(ts_prev) and pd.notna(ts_first):
                     dt_ms = (ts_first - ts_prev).total_seconds() * 1000
                     if dt_ms > dt_max_ms:
                         print(f"Analyzing: {file}")
                         print(f"  ⚠️ Time gap between {last_file} and {file}: dt = {dt_ms/1000:.2f} s")
-                        row = df.iloc[[0]].copy()
-                        row.insert(0, "file", f"{last_file} → {file}")
-                        row.insert(1, "dtSec", dt_ms/1000)
+                        row = pd.DataFrame({
+                            "file": [f"{last_file} → {file}"],
+                            "dtSec": [dt_ms / 1000]
+                        })
                         df_gaps_list.append(row)
                 else:
                     print(f"Analyzing: {file}")
                     print("  ⚠️ Missing timestamp between consecutive files")
             
             # Calc dt in milliseconds between rows in file
-            delta_t = df.index.diff().dt.total_seconds() * 1000
+            delta_t = df.index.diff().total_seconds() * 1000
             
             # Find index with dt > threshold
-            time_gaps_index = delta_t[delta_t > dt_max_ms].index
+            time_gaps_index = delta_t[delta_t > dt_max_ms]
 
             # Append rows with time gaps
             if len(time_gaps_index) > 0:
-                row_with_gaps = df.iloc[time_gaps_index].copy()
-                row_with_gaps.insert(0, "file", file)
-                row_with_gaps.insert(1, "dt", delta_t.iloc[time_gaps_index].values)
+                row_with_gaps = pd.DataFrame({
+                            "file": [file],
+                            "dtSec": delta_t[delta_t > dt_max_ms].to_numpy()/1000,
+                            "TIMESTAMP": df.index[delta_t > dt_max_ms]
+                        })
                 df_gaps_list.append(row_with_gaps)
                 print(f"Analyzing: {file}")
                 print(f"  ✓ Find {len(row_with_gaps)} rows with delta t > {dt_max_ms} ms")
@@ -146,6 +149,7 @@ def chech_TOA5 (input_dir : str,
             print(f"Analyzing: {file}")
             print(f"  ✗ Error: {e}")
 
+    info = meta[0].strip().split('","')
     # Build df
     if df_gaps_list:
         df_gaps = pd.concat(df_gaps_list, ignore_index=True)
@@ -154,38 +158,30 @@ def chech_TOA5 (input_dir : str,
         print(f"{'='*60}\n")
         print(df_gaps)
         if out_file:
-            df_gaps.to_csv(f'time_gaps_{meta[0][1]}.csv', index=False)
+            out_path = os.path.join(input_dir, f'time_gaps_{info[1]}_{info[7][:-1]}.csv')
+            df_gaps.to_csv(out_path, index=False)
     else:
+        print(f"\n{'='*60}")
         print("No time gaps found.")
-
-        '''df_gaps = pd.DataFrame(columns=[
-            "file", "dt", "TIMESTAMP", "RECORD", "u_1", "v_1", "w_1", "Ts_1",
-            "SS_1", "ChkSumF_1", "u_2", "v_2", "w_2", "Ts_2", "SS_2", "ChkSumF_2"
-        ])'''
+        print(f"{'='*60}\n")
+        df_gaps = pd.DataFrame()
 
     if df_nan_list:
         df_nan = pd.concat(df_nan_list, ignore_index=True)
         print("\n" + "="*60)
-        print(f"TOTALE: {len(df_nan)} righe con valori NAN")
+        print(f"TOTAL: {len(df_nan)} rows with NAN values")
         print("="*60 + "\n")
         print(df_nan)
         if out_file:
-            df_nan.to_csv('nan_'+datalogger+'.csv', index=False)
+            out_path = os.path.join(input_dir, f'nan_{info[1]}_{info[7][:-1]}.csv')
+            df_nan.to_csv(out_path, index=False)
     else:
+        print(f"\n{'='*60}")
         print("No NAN values found")
-        '''df_nan = pd.DataFrame(columns=[
-            "TIMESTAMP", "RECORD", "u_1", "v_1", "w_1", "Ts_1",
-            "SS_1", "ChkSumF_1", "u_2", "v_2", "w_2", "Ts_2", "SS_2", "ChkSumF_2"
-        ])'''
+        print(f"{'='*60}\n")
+        df_nan = pd.DataFrame()
 
-    
-
-    print("\n" + "="*60)
-    print(f"TOTALE: {len(df_nan)} righe con valori NAN")
-    print("="*60 + "\n")
-    print(df_nan)
-    if out_file:
-        df_nan.to_csv('nan_'+datalogger+'.csv', index=False)
+    return df_gaps, df_nan
 
 def despiking_series_robust(input_series: pd.Series, 
                             robust_std_dev: float, 
