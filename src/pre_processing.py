@@ -3,9 +3,10 @@ import pandas as pd
 import numpy as np
 import warnings
 import matplotlib.pyplot as plt
-from typing import Tuple
+from pathlib import Path
+from typing import Tuple, List
 
-def import_file(input_file: str) -> pd.DataFrame:
+def import_file(input_file: str) -> Tuple[pd.DataFrame, List[str]]:
     """
     Work with TOA5 file data from Sonic Anemometer and Termoigrometers with N vertical levels
 
@@ -16,9 +17,16 @@ def import_file(input_file: str) -> pd.DataFrame:
 
     Returns
     -------
-    pd.DataFrame
-        Pandas Dataframe with TIMESTAMP and numerical and validation data.
+    Tuple[pd.DataFrame, List[str]]
+        - Pandas Dataframe with TIMESTAMP and numerical and validation data.
+        - List of strings containing the original 4 header lines of the TOA5 file.
     """
+
+    #extract header
+    raw_header = []
+    with open(input_file, 'r', encoding='utf-8') as f:
+        for _ in range(4):
+            raw_header.append(f.readline())
 
     df = pd.read_csv(input_file, sep=",", header=0, skiprows=[0,2,3], dtype="string")
     type_list = [str]*1 + [int]*1 + [float]*4 + [str]*1 + [bool]*1
@@ -37,7 +45,7 @@ def import_file(input_file: str) -> pd.DataFrame:
     df.drop(columns=['TIMESTAMP'], inplace=True, errors='ignore')
     df.drop(columns=['RECORD'], inplace=True)
 
-    return df
+    return df, raw_header
 
 def despiking_series_robust(input_series: pd.Series, 
                             robust_std_dev: float, 
@@ -129,6 +137,84 @@ def despiking_series_robust(input_series: pd.Series,
     timeseries.loc[spike_mask] = running_median.loc[spike_mask]
 
     return timeseries, count_spike
+
+def despiking_TOA5_robust(file_path: str,
+                          out_path: str, 
+                          robust_std_dev: float, 
+                          n_window_points: int, 
+                          show_plot: bool = False) -> str:
+    """
+    Despike data directly from a TOA5 format file.
+    Put despiked data into a similar TOA5 format: the first header row info is manteined.
+    Info on the measurmemts units is lost in the new header.
+    Applies a moving-window robust despiking algorithm.
+    If a record exceeds N times the robust standard deviation, it's marked as spike.
+    
+    Detected spikes are replaced with the local running median. 
+
+    Parameters
+    ----------
+    file_path : str
+        Path to TOA5 data file from campbell datalogger
+    out_path : str
+        Output dir where put despiked file
+    robust_std_dev : float
+        Threshold multiplier for the robust standard deviation.
+    n_window_points : int
+        Number of periods for the rolling window.
+    show_plot : bool, optional
+        If True, displays a plot showing the original series, the dynamic bounds, 
+        and the identified spikes. Default is False.
+
+    Returns
+    -------
+    pd.Series
+        The despiked series.
+    int
+        The number of spikes removed.
+    """
+    #import file
+    df, meta = import_file(file_path)
+
+    print(f"Despiking {file_path}")
+
+    # select relevant column and mask row with error (from Gill Windmaster instrument) 
+    columns_meas = ['u_1', 'v_1', 'w_1', 'Ts_1']
+    condition = (df['SS_1'] != "0B") & (df['SS_1'] != "00") 
+    df[columns_meas] = df[columns_meas].mask(condition)
+
+    # despiking on measurments column
+    for c in columns_meas:
+        despiked_series, n_spikes = despiking_series_robust(
+            df[c], 
+            robust_std_dev=robust_std_dev, 
+            n_window_points=n_window_points, 
+            show_plot=show_plot
+        )
+        
+        # replace column with despiked column
+        df[c] = despiked_series
+        
+        print(f"Column {c}: {n_spikes} spike replaced.")
+        
+    #output file info
+    print(f"Number of records in output file: {len(df)}.")
+    print(f"First timestamp: {df.index.min()}")
+    print(f"Lasr timestamp: {df.index.max()}")
+
+    # output path
+    in_path = Path(file_path)
+    out_path = Path(out_path)
+    # new filename
+    out_path = out_path.parent / f"desp_{in_path.stem}{in_path.suffix}"
+
+    # Save to file header info and data despiked
+    with open(out_path, 'w', encoding='utf-8') as f:
+        f.writelines(meta[0])
+
+    df.to_csv(out_path, mode='a', sep=",")
+
+    return str(out_path)
 
 def average_toa5(input_file, output_file, freq='10min'):
     """
