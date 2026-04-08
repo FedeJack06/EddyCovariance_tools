@@ -8,4 +8,6 @@ If you are using a Campbell datalogger, you can convert Campbell TOB3 file, than
 
 It will contain despiking method and rotation-to-streamline methods.
 
+NB:  git submodule update --init --recursive
+
 This repo is a work in progress.
