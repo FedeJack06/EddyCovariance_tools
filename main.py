@@ -28,11 +28,11 @@ for c in columns_meas:
 
 print(despiked)
 
-'''ES3_10m_clean = pd.DataFrame({
-     "u": u_clean,
-     "v": v_clean,
-     "w": w_clean,
-     "T_s": ts_clean
+'''despiked = pd.DataFrame({
+     "u": u,
+     "v": v,
+     "w": w,
+     "T_s": ts
  }, index=time)'''
 
 ############ Despike from TOA5

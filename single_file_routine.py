@@ -21,4 +21,7 @@ dest_folder = cartella_parente+'/conv'
 # ROUTINE
 
 result = tt.tob3toa5(file_path=file_da_convertire, out_dir=dest_folder)
-print(result)
+print(f"converted file:{result}")
+
+despiked = pp.despiking_TOA5_robust(file_path=result, out_path=dest_folder, robust_std_dev=4, n_window_points=9, show_plot=False)
+print(f"despiked file: {despiked}")
