@@ -4,7 +4,7 @@ from src import pre_processing as pp
 from pathlib import Path
 
 path = Path("./data")
-stringa_da_cercare = "Slow_2026-03-26_14"
+stringa_da_cercare = "Sonic_2026-03-26_00-01-34.dat"
 
 # Usa rglob per cercare in questa cartella E in tutte le sottocartelle
 # Usa glob se vuoi cercare SOLO nella cartella principale

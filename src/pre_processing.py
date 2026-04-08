@@ -196,7 +196,7 @@ def despiking_TOA5_robust(file_path: str,
         df[c] = despiked_series
         
         print(f"Column {c}: {n_spikes} spike replaced.")
-        
+
     #output file info
     print(f"Number of records in output file: {len(df)}.")
     print(f"First timestamp: {df.index.min()}")
@@ -206,7 +206,7 @@ def despiking_TOA5_robust(file_path: str,
     in_path = Path(file_path)
     out_path = Path(out_path)
     # new filename
-    out_path = out_path.parent / f"desp_{in_path.stem}{in_path.suffix}"
+    out_path = out_path / f"desp_{in_path.stem}{in_path.suffix}"
 
     # Save to file header info and data despiked
     with open(out_path, 'w', encoding='utf-8') as f:
