@@ -32,7 +32,7 @@ def import_file(input_file: str) -> Tuple[pd.DataFrame, List[str]]:
             raw_header.append(f.readline())
 
     #csv to df
-    df = pd.read_csv(input_file, sep=",", header=1, skiprows=[2, 3])
+    df = pd.read_csv(input_file, sep=",", header=1, skiprows=[2, 3], low_memory=False)
 
     #select TIMESTAMP as index
     if 'TIMESTAMP' in df.columns:
@@ -49,7 +49,7 @@ def import_file(input_file: str) -> Tuple[pd.DataFrame, List[str]]:
 
     return df, raw_header
 
-def chech_TOA5 (input_dir : str,
+def check_TOA5 (input_dir : str,
                 dt_max_ms : int,
                 start_name : str,
                 end_name : str,
