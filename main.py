@@ -11,7 +11,7 @@ print(result)'''
 
 ############# Check folder
 
-pp.chech_TOA5('../2026-03-26/26458', dt_max_ms=1000, start_name="TOA5_Slow", end_name=".dat", out_file=True)
+#pp.chech_TOA5('../2026-03-26/26458', dt_max_ms=1000, start_name="TOA5_Slow", end_name=".dat", out_file=True)
 
 ############# Despike
 #path_file = "data/TOA5py_Sonic_2026-03-26_00-03-23.dat"
@@ -44,3 +44,9 @@ print(despiked)'''
 #path_file = "data/TOA5py_Slow_2026-03-26_00-01-34.dat"
 
 #file_desp = pp.despiking_TOA5_robust(path_file, out_path=out_path, robust_std_dev=4, n_window_points=9, show_plot=True)
+
+#pp.daily_file_from_server("../2026-03-26/4175", "./data", "TOA5_", ".dat")
+
+pp.chech_TOA5('./data', dt_max_ms=50, start_name="TOA5_Sonic_2026-03-26_Dail", end_name=".dat", out_file=False)
+
+#pp.import_file('./data/TOA5_Sonic_2026-03-26_Daily.dat')

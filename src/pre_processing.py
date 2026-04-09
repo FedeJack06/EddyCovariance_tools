@@ -6,10 +6,12 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Tuple, List
 import os
+from collections import defaultdict
 
 def import_file(input_file: str) -> Tuple[pd.DataFrame, List[str]]:
     """
-    Work with TOA5 file data from Sonic Anemometer and Termoigrometers with N vertical levels
+    Work with TOA5 file data from Campbell dataloggers (Sonic, Slow, etc.)
+    with Sonic Anemometer and Termoigrometers with N vertical levels
 
     Parameters
     ----------
@@ -19,8 +21,8 @@ def import_file(input_file: str) -> Tuple[pd.DataFrame, List[str]]:
     Returns
     -------
     Tuple[pd.DataFrame, List[str]]
-        - Pandas Dataframe with TIMESTAMP and numerical and validation data.
-        - List of strings containing the original 4 header lines of the TOA5 file.
+        - Pandas Dataframe with TIMESTAMP as index and numerical data.
+        - List of strings containing the original 4 header lines.
     """
 
     #extract header
@@ -29,22 +31,21 @@ def import_file(input_file: str) -> Tuple[pd.DataFrame, List[str]]:
         for _ in range(4):
             raw_header.append(f.readline())
 
-    df = pd.read_csv(input_file, sep=",", header=1, skiprows=[2, 3], dtype="string")
-    type_list = [str]*1 + [int]*1 + [float]*4 + [str]*1 + [bool]*1
-    dictionary = dict( zip(df.columns, type_list) )
-    df = df.astype(dictionary)
+    #csv to df
+    df = pd.read_csv(input_file, sep=",", header=1, skiprows=[2, 3])
 
-    first_column = df.columns[0]
-    # Converte la colonna in datetime
-    df[first_column] = pd.to_datetime(
-        df[first_column], 
-        format='mixed', 
-        errors='coerce'
-    )
+    #select TIMESTAMP as index
+    if 'TIMESTAMP' in df.columns:
+        df['TIMESTAMP'] = pd.to_datetime(
+            df['TIMESTAMP'], 
+            format='mixed', 
+            errors='coerce'
+        )
+        df.set_index('TIMESTAMP', inplace=True)
+        df.drop(columns=['TIMESTAMP'], inplace=True, errors='ignore')
 
-    df.set_index('TIMESTAMP', inplace=True)
-    df.drop(columns=['TIMESTAMP'], inplace=True, errors='ignore')
-    df.drop(columns=['RECORD'], inplace=True)
+    #remove RECORD column if exists
+    df.drop(columns=['RECORD'], inplace=True, errors='ignore')
 
     return df, raw_header
 
@@ -182,6 +183,141 @@ def chech_TOA5 (input_dir : str,
         df_nan = pd.DataFrame()
 
     return df_gaps, df_nan
+
+def daily_file_from_server(input_dir: str, 
+                          output_dir: str,
+                          start_name : str,
+                          end_name : str):
+    """
+    From fiel with DATETIME in the name
+    Raggruppa i file TOA5 orari per giorno e tipologia (Slow/Sonic) 
+    e li concatena in file giornalieri.
+    """
+    input_path = Path(input_dir)
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Dizionario per raggruppare i file. Formato: {('Slow', '2026-03-26'): [lista_file]}
+    file_groups = defaultdict(list)
+
+    # 1. Scansiona e raggruppa i file
+    for file_path in input_path.glob(f'{start_name}*{end_name}'):
+        nome_file = file_path.name
+        parti = nome_file.split('_')
+        
+        # Ci aspettiamo nomi come: TOA5_Slow_2026-03-26_00-01-06.dat
+        if len(parti) >= 4:
+            tipo_file = parti[1]          # 'Slow' o 'Sonic'
+            data_file = parti[2]          # '2026-03-26'
+            
+            file_groups[(tipo_file, data_file)].append(file_path)
+
+    # 2. Concatena i file raggruppati
+    for (tipo_file, data_file), files in file_groups.items():
+        # Ordina i file alfabeticamente (che corrisponde all'ordine cronologico grazie ai nomi)
+        files.sort()
+        
+        nome_output = f"TOA5_{tipo_file}_{data_file}_Daily.dat"
+        output_file_path = output_path / nome_output
+        
+        print(f"Creazione di {nome_output} (unendo {len(files)} file)...")
+        
+        with open(output_file_path, 'w', encoding='utf-8') as outfile:
+            for indice, file_orario in enumerate(files):
+                with open(file_orario, 'r', encoding='utf-8') as infile:
+                    # Se è il primo file, scrivi tutto (incluso l'header di 4 righe)
+                    if indice == 0:
+                        outfile.write(infile.read())
+                    # Per i file successivi, salta le prime 4 righe
+                    else:
+                        for _ in range(4):
+                            next(infile, None)  # Salta la riga
+                        # Scrivi il resto dei dati
+                        for riga in infile:
+                            outfile.write(riga)
+
+    print("Concatenazione completata!")
+
+# Esempio di utilizzo:
+# crea_file_giornalieri('./cartella_dati_orari', './cartella_dati_giornalieri')
+
+import os
+from pathlib import Path
+from collections import defaultdict
+
+def smista_e_unisci_sonic_per_contenuto(input_dir: str, output_dir: str):
+    """
+    Legge il timestamp reale all'interno dei file Sonic, li raggruppa per giorno 
+    e crea i file giornalieri unificati.
+    """
+    input_path = Path(input_dir)
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Dizionario per raggruppare i file per data reale: {'2026-03-25': [lista_file]}
+    file_per_data = defaultdict(list)
+    
+    print("Fase 1: Lettura del contenuto dei file per estrarre la data esatta...")
+    
+    # Trova tutti i file nella cartella (puoi filtrare per 'Sonic' se necessario)
+    for file_path in input_path.glob('*.dat'):
+        # Assicuriamoci che sia un file Sonic guardando la prima riga se vogliamo essere pignoli, 
+        # oppure diamo per scontato che gli passi la cartella giusta.
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                # Salta le 4 righe di intestazione
+                for _ in range(4):
+                    f.readline()
+                
+                # Leggi la prima riga di dati veri
+                prima_riga_dati = f.readline()
+                
+                if not prima_riga_dati:
+                    continue # File vuoto, saltalo
+                
+                # La riga è tipo: "2026-03-25 23:00:00.05",21451954,4.595,...
+                # Dividiamo per virgola, prendiamo il primo elemento, togliamo le virgolette
+                timestamp_str = prima_riga_dati.split(',')[0].replace('"', '')
+                
+                # Ora abbiamo "2026-03-25 23:00:00.05". Prendiamo solo la data (prima dello spazio)
+                data_reale = timestamp_str.split(' ')[0] 
+                
+                file_per_data[data_reale].append(file_path)
+                
+        except Exception as e:
+            print(f"Errore nella lettura di {file_path.name}: {e}")
+
+    print(f"Trovati dati per {len(file_per_data)} giorni diversi. Inizio unione...")
+
+    # Fase 2: Unione dei file giornalieri (identica a prima, ma ora basata sulla data certa)
+    for data_reale, files in file_per_data.items():
+        # Ordiniamo i file: essendo basati sul timestamp orario, ordinarli alfabeticamente 
+        # per nome (che contiene l'ora) di solito basta per metterli in ordine cronologico.
+        files.sort()
+        
+        nome_output = f"TOA5_Sonic_{data_reale}_Daily.dat"
+        output_file_path = output_path / nome_output
+        
+        print(f"-> Creazione di {nome_output} ({len(files)} file orari uniti)")
+        
+        with open(output_file_path, 'w', encoding='utf-8') as outfile:
+            for indice, file_orario in enumerate(files):
+                with open(file_orario, 'r', encoding='utf-8') as infile:
+                    if indice == 0:
+                        # Primo file del giorno: scrivi tutto, compreso l'header TOA5
+                        outfile.write(infile.read())
+                    else:
+                        # File successivi: salta le 4 righe di header e copia i dati
+                        for _ in range(4):
+                            next(infile, None)
+                        for riga in infile:
+                            outfile.write(riga)
+
+    print("Completato con successo!")
+
+# Esempio di utilizzo:
+# smista_e_unisci_sonic_per_contenuto('./dati_orari', './dati_giornalieri_sicuri')
 
 def despiking_series_robust(input_series: pd.Series, 
                             robust_std_dev: float, 
