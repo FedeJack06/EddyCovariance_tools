@@ -8,7 +8,9 @@ from typing import Tuple, List
 import os
 from collections import defaultdict
 
-def import_file(input_file: str) -> Tuple[pd.DataFrame, List[str]]:
+def import_file(input_file : str,
+                measure_fields : List[str] = [],
+                clear_df : bool = False) -> Tuple[pd.DataFrame, List[str]]:
     """
     Work with TOA5 file data from Campbell dataloggers (Sonic, Slow, etc.)
     with Sonic Anemometer and Termoigrometers with N vertical levels
@@ -17,6 +19,10 @@ def import_file(input_file: str) -> Tuple[pd.DataFrame, List[str]]:
     ----------
     input_file: str
         path to file in TOA5
+    measure_fields: List[str]
+        columne name of the measured variable, that must be converted to float
+    clear_df: bool
+        remove non numeric columns, with no physical relevance, such as error code info, serial communication checksum, and RECORD number column
 
     Returns
     -------
@@ -25,6 +31,11 @@ def import_file(input_file: str) -> Tuple[pd.DataFrame, List[str]]:
         - List of strings containing the original 4 header lines.
     """
 
+    if clear_df == True and not measure_fields:
+        raise ValueError("If you want to clear the dataframe, you must specify the Measure_fields.")
+    elif not measure_fields:
+        warnings.warn("Measure_fields not set. If you don't specify which columns are measures, which must be float, you may run into type errors later.")
+    
     #extract header
     raw_header = []
     with open(input_file, 'r', encoding='utf-8') as f:
@@ -44,8 +55,13 @@ def import_file(input_file: str) -> Tuple[pd.DataFrame, List[str]]:
         df.set_index('TIMESTAMP', inplace=True)
         df.drop(columns=['TIMESTAMP'], inplace=True, errors='ignore')
 
-    #remove RECORD column if exists
-    df.drop(columns=['RECORD'], inplace=True, errors='ignore')
+    #keep only relevant numeric columns
+    if clear_df:
+        df = df.filter(items=measure_fields)
+
+    #measures columns to float
+    if measure_fields:
+        df[measure_fields] = df[measure_fields].apply(pd.to_numeric, errors='coerce')
 
     return df, raw_header
 
