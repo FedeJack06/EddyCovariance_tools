@@ -11,3 +11,10 @@ It will contain despiking method and rotation-to-streamline methods.
 NB:  git submodule update --init --recursive
 
 This repo is a work in progress.
+
+Required:
+- python 3
+- matplotlib
+- pandas
+- numpy
+- duckdb

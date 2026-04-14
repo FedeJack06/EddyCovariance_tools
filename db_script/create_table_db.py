@@ -2,7 +2,7 @@ import duckdb as db
 
 table_name = "sonic_6551"
 
-con = db.connect("trieste_campaign.db")
+con = db.connect("trieste_campaign_tmp.db")
 
 querySonic = f"""
     CREATE TABLE IF NOT EXISTS {table_name} (
