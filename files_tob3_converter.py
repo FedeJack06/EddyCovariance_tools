@@ -1,5 +1,4 @@
 from tob3_py_converter.src import tob3_to_toa5 as tt
-from src import pre_processing as pp
 
 from pathlib import Path
 
