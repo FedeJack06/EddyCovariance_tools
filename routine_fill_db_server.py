@@ -10,7 +10,7 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-db_file = "/media/federico/1450407050405B1E/trieste_campaign_tmp.db"
+db_file = "../trieste_campaign_tmp.db"
 in_dir = "/media/federico/BackupFoto/trieste_campaign/"
 stations = ["26458","4175","26428","4174","6551"]
 
@@ -40,7 +40,7 @@ for station in stations:
     
     ################# SONIC
     try:
-        start_name = "TOA5_Sonic"
+        start_name = "TOA5py_Sonic"
         files = sorted([f for f in os.listdir(path) if f.startswith(start_name) and f.endswith('.dat')])
         print(f"Find {len(files)} file {start_name} in {path}\n")
 
@@ -70,7 +70,7 @@ for station in stations:
                 SELECT index, {df_sonic_col} FROM sonic_df
             """).fetchone()[0]
 
-            print(f"Sonic: Query OK, {sonic_insert} row(s) affected")
+            print(f"{file}: Query OK, {sonic_insert} row(s) affected")
 
         except db.Error as e:
             logging.error(f"Station {station} | File: {file} | Error Sonic: {e}")
@@ -78,7 +78,7 @@ for station in stations:
     ###########################################
     ################# SLOW ####################
     try:
-        start_name = "TOA5_Slow"
+        start_name = "TOA5py_Slow"
         files = sorted([f for f in os.listdir(path) if f.startswith(start_name) and f.endswith('.dat')])
         print(f"Find {len(files)} file {start_name} in {path}\n")
 
@@ -104,7 +104,7 @@ for station in stations:
                 INSERT INTO slow_{station} (datetime, {db_slow_col})
                 SELECT index, {df_slow_col} FROM slow_df
             """).fetchone()[0]
-            print(f"Slow: Query OK, {slow_insert} row(s) affected")
+            print(f"{file}: Query OK, {slow_insert} row(s) affected")
 
         except db.Error as e:
             logging.error(f"Station {station} | File: {file} | Error Slow: {e}")
@@ -112,7 +112,7 @@ for station in stations:
     ###########################################
     ################# STAT ####################
     try:
-        start_name = "TOA5_Stat"
+        start_name = "TOA5py_Stat"
         files = sorted([f for f in os.listdir(path) if f.startswith(start_name) and f.endswith('.dat')])
         print(f"Find {len(files)} file {start_name} in {path}\n")
 
@@ -138,9 +138,9 @@ for station in stations:
                 INSERT INTO stat_{station} (datetime, battVmin, card_status)
                 SELECT index, BattV_Min, CardStatus FROM stat_df
             """).fetchone()[0]
-            print(f"Stat: Query OK, {stat_insert} row(s) affected")
+            print(f"{file}: Query OK, {stat_insert} row(s) affected")
 
         except db.Error as e:
-            logging.error(f"Station {station} | File: {file} | Error Stat: {e}")(f"Error Stat: {e}")
+            logging.error(f"Station {station} | File: {file} | Error Stat: {e}")
 
 con.close()

@@ -1,6 +1,14 @@
 import duckdb as db
 import src.pre_processing as pp
 import os
+import logging
+
+logging.basicConfig(
+    filename='routine_fill_db_sd.log', 
+    level=logging.ERROR, # Registra solo da ERROR in su (ignora info/debug)
+    format='%(asctime)s - ERROR - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 db_file = "trieste_campaign.db"
 in_dir = "/media/federico/BackupFoto/trieste_campaign/"
@@ -37,7 +45,7 @@ for station in stations:
         print(f"Find {len(files)} file {start_name} in {path}\n")
 
     except FileNotFoundError:
-        print(f"Error: folder {path} not found. Skip station...")
+        logging.error(f"Error: folder {path} not found. Skip station...")
         files = []
         continue
 
@@ -62,10 +70,10 @@ for station in stations:
                 SELECT index, {df_sonic_col} FROM sonic_df
             """).fetchone()[0]
 
-            print(f"Sonic: Query OK, {sonic_insert} row(s) affected")
+            print(f"{file}: Query OK, {sonic_insert} row(s) affected")
 
         except db.Error as e:
-            print(f"Error Sonic: {e}")
+            logging.error(f"Station {station} | File: {file} | Error Sonic: {e}")
 
     ###########################################
     ################# SLOW ####################
@@ -75,7 +83,7 @@ for station in stations:
         print(f"Find {len(files)} file {start_name} in {path}\n")
 
     except FileNotFoundError:
-        print(f"Error: folder {path} not found. Skip station...")
+        logging.error(f"Error: folder {path} not found. Skip station...")
         files = []
         continue
 
@@ -96,10 +104,10 @@ for station in stations:
                 INSERT INTO slow_{station} (datetime, {db_slow_col})
                 SELECT index, {df_slow_col} FROM slow_df
             """).fetchone()[0]
-            print(f"Slow: Query OK, {slow_insert} row(s) affected")
+            print(f"{file}: Query OK, {slow_insert} row(s) affected")
 
         except db.Error as e:
-            print(f"Error Slow: {e}")
+            logging.error(f"Station {station} | File: {file} | Error Slow: {e}")
 
     ###########################################
     ################# STAT ####################
@@ -109,7 +117,7 @@ for station in stations:
         print(f"Find {len(files)} file {start_name} in {path}\n")
 
     except FileNotFoundError:
-        print(f"Error: folder {path} not found. Skip station...")
+        logging.error(f"Error: folder {path} not found. Skip station...")
         files = []
         continue
 
@@ -130,9 +138,9 @@ for station in stations:
                 INSERT INTO stat_{station} (datetime, battVmin, card_status)
                 SELECT index, BattV_Min, CardStatus FROM stat_df
             """).fetchone()[0]
-            print(f"Stat: Query OK, {stat_insert} row(s) affected")
+            print(f"{file}: Query OK, {stat_insert} row(s) affected")
 
         except db.Error as e:
-            print(f"Error Stat: {e}")
+            logging.error(f"Station {station} | File: {file} | Error Stat: {e}")
 
 con.close()
