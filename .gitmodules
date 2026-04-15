@@ -1,3 +1,3 @@
-[submodule "tob3_py_converter/campbell"]
-	path = tob3_py_converter/campbell
+[submodule "src/tob3_py_converter/campbell"]
+	path = src/tob3_py_converter/campbell
 	url = https://github.com/FedeJack06/campbell.git
