@@ -55,7 +55,7 @@ def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="", decimals=3):
         del meta[4] # Wait, if you delete index 1 first, the old index 5 becomes index 4. 
                     # Assuming this logic is correct for your specific use case.
 
-    print(f"Writing TOA5 file to: {out_path} \n")
+    print(f"Writing TOA5 file to: {out_path}")
 
     # Write data to the new file
     with open(out_path, mode='w', newline='', encoding='ascii') as f:
@@ -94,5 +94,7 @@ def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="", decimals=3):
                     formatted_row.append(item)
                     
             writer.writerow(formatted_row)
+
+    print("End convertion\n")
 
     return out_path
