@@ -10,9 +10,10 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-db_file = "trieste_campaign.db"
-in_dir = "/media/federico/BackupFoto/trieste_campaign/"
-stations = ["26458","4175","26428","4174","6551"]
+db_file = "../trieste_campaign.db"
+in_dir = "../"
+#stations = ["26458","4175","26428","4174","6551"]
+stations = ["26428"]
 
 con = db.connect(db_file)
 

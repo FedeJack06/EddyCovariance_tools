@@ -1,9 +1,9 @@
-from tob3_py_converter.src import tob3_to_toa5 as tt
+from src.tob3_py_converter.src import tob3_to_toa5 as tt
 
 from pathlib import Path
 
-path = Path("/media/federico/BackupFoto/trieste_campaign/26458")
-start_name = "S"
+path = Path("../26428_sd")
+start_name = "2"
 end_name = ".dat"
 
 # Usa rglob per cercare in questa cartella E in tutte le sottocartelle
