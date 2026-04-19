@@ -4,23 +4,44 @@ from typing import Dict, Tuple, List
 @dataclass
 class InputFileConfig:
     """
-    Configuration parameters for importing data from different files.
+    Configuration parameters for importing data from different file types. 
+    Contains the structure of the input files and the database tables.
+    The aim is putting in relation the name of the column in the input
+    files and the name of the column in the database table and in the Pandas dataframe.
+
+    If you want to import a column from files, you have to insert the column info
+    as a new entry in the dictionary named cols:
+    1) Set the name of the column in the input file, it will be the same in the Pandas
+       dataframe related to the file (dictionary key)
+    2) Set the Pandas type the column should have in the dataframe (first tuple entry)
+    3) Set name of the same column in the table of the database (second tuple entry)
+    4) Set column SQL type the column should have in the database (third tuple entry)
+
+    Three default profiles of input file are present, you can set these profile with
+    the three methods. They refer to TOA5 input files generated from standard
+    eddy covariance experiment.
     
     Attributes:
-        files_name: filename containing this string will be loaded
-        db_table_prefix: prefix for table name in the database. 
-                         Final table name will be {prefix}_{station_name}
-        cols: column names in the file, their type, 
-              column names in the database table, their type
+        cols: Dict[str, Tuple[type, str, str]]: Key is the name of the column in the input files.
+              Value is a tuple contains in order, the pandas type of the column,
+              the name of the column in the database table (can be different from file),
+              the SQL type of the column in the table (used to create the table). 
     """
-    file_name: str
     cols: Dict[str, Tuple[type, str, str]]
 
     @classmethod
-    def gillwindmaster(cls, file_name: str = "sonic", n_levels: int = 1):
+    def gillwindmaster(cls, n_levels: int = 1):
         """
-        Constructor for standard Gill Windmaster with n_levels sonic anemometer.
-        One sonic for each level.
+        Set the configuration for standard sonic anemometers, with n vertical 
+        levels (Gill Windmaster). For each level (identified by the number i) four
+        variable are expected: u_i, v_i, w_i, three components of the wind and 
+        Ts_i the sonic temperature. Gill Windmaster, with high precision enabled,
+        generate measures with three decimal digits. The maximum value is 50 m/s so
+        the database type for sonic measure can be DECIMAL(6,3), to save space.
+
+        Attributes:
+            n_levels: number of vertical levels or number of sonic instruments,
+                      recorded in the same file.
         """
         if n_levels <= 0:
             raise ValueError("Number of level/instruments must be non zero and positive.")
@@ -38,16 +59,22 @@ class InputFileConfig:
         
         # Create gill object
         return cls(
-            file_name = file_name, 
             cols = cols_gill_windmaster
         )
     
     @classmethod
-    def defaultTermoigrometer(cls, file_name: str = "slow", n_levels: int = 1):
+    def defaultTermoigrometer(cls, n_levels: int = 1):
         """
-        Constructor fro standard file from termoigrometer.
-        Temperature and relative humidity with max 2 decimal of precision.
-        One instrumento for each level.
+        Set the configuration for standard termoigrometers, with n vertical 
+        levels. For each level (identified by the number i) two
+        variable are expected: AirTC{i}, air temperature and RH{i}, air relative 
+        humidity. Standard slow termoigrometers (1Hz samplig rate)
+        generate measures with one/two decimal digits, so the database
+        type for these measure can be DECIMAL(5,2), to save space.
+
+        Attributes:
+            n_levels: number of vertical levels or number of termoigrometers,
+                      recorded in the same file.
         """
         if n_levels <= 0:
             raise ValueError("Number of level/instruments must be non zero and positive.")
@@ -62,15 +89,16 @@ class InputFileConfig:
             cols_trh[f"RH{i}"] = (float, f"rh_{i}", "DECIMAL(5,2)")
 
         return cls(
-            file_name = file_name, 
             cols = cols_trh
         )
 
     @classmethod
-    def defaultStatus(cls, file_name: str = "stat"):
+    def defaultStatus(cls):
         """
-        Constructor for the structur of default status files, 
-        containing info about status of the battery and SD card of the station.
+        Set the configuration to read the status files. They contain info
+        about the status of the station, for example a Campbell datalogger.
+        Here an example with battery voltage and info about the SD card
+        where files are stored.
         """
         cols_status = {
             "TIMESTAMP" : ('datetime64[ms]', "datetime", "DATETIME PRIMARY KEY"),
@@ -78,21 +106,23 @@ class InputFileConfig:
             "CardStatus": (str, "card_status", "VARCHAR(10)")
         }
 
-        return cls(
-            file_name = file_name, 
+        return cls( 
             cols = cols_status
         )
     
     def get_file_cols_name(self) -> List[str]:
         """
-        Return a list of column name of the input files
+        Return a list with the input file column names.
         """
         return list(self.cols.keys())
     
     def get_file_cols_type(self) -> Dict[str, str]:
         """
+        Return a dictionary that maps the input file column name with 
+        its type.
+
         Key: column name in the input file,
-        Value: column type in the input file
+        Value: pandas type of the column.
         """
         dict = {}
         for key, value in self.cols.items():
@@ -101,8 +131,11 @@ class InputFileConfig:
     
     def get_table_cols_name(self) -> Dict[str, str]:
         """
+        Return a dictionary that maps the input file column name with 
+        the column name in the database table.
+
         Key: column name in the input file,
-        Value: column name in the database table
+        Value: column name in the database table.
         """
         dict = {}
         for key, value in self.cols.items():
@@ -111,8 +144,11 @@ class InputFileConfig:
     
     def get_table_cols_type(self) -> Dict[str, str]:
         """
+        Return a dictionary that maps the column name in the database table 
+        with its SQL type. 
+
         Key: column name in the database table,
-        Value: column type in the database table
+        Value: column SQL type in the database table.
         """
         dict = {}
         for value in self.cols.values():
@@ -121,35 +157,83 @@ class InputFileConfig:
 
 @dataclass
 class StationConfig:
+    """
+    Configuration parameters for a single station, identified by station_name,
+    for example the serial number of a Campbell datalogger.
+    The aim is use this class to contains all the info about the station data
+    and related files.
+
+    You can add to a single station multiple InputFileConfig (one for each type
+    of input file), using add_input_file_config() method. You have to specify:
+    1) An ID that identify the type of input file (e.g. sonic, slow, stat)
+    2) A dictionary that associates the config_id and the name of the database table,
+       which will contain data from all files of the same type
+    3) A dictionary that associates the config_id and the substring contained in
+       all file names of the same type
+
+    Attributes:
+        station_name: name/id of the station
+        db_table_names: dict with config_id as key and database table name as value
+        input_files_name: dict with config_id as key and substring, contained in
+                          all file names of the same type, as value
+        input_files_config: dict with config_id as key and InputFileConfig as value
+    """
     station_name: str
     db_table_names: Dict[str, str] = field(default_factory=dict)
-    input_files: Dict[str, 'InputFileConfig'] = field(default_factory=dict)
+    input_files_name: Dict[str, str] = field(default_factory=dict)
+    input_files_config: Dict[str, 'InputFileConfig'] = field(default_factory=dict)
 
-    def add_input_file_config(self, config_id: str, config: 'InputFileConfig', db_table_name: str):
+    def add_input_file_config(self, config_id: str, config: 'InputFileConfig', db_table_name: str, input_files_name: str):
         """
         Add new InputFileConfig object to the station.
-        """
-        self.input_files[config_id] = config
-        self.db_table_names[config_id] = db_table_name
+        One config for each type of files generated from the station.
 
-    def get_files_config(self):
+        Attributes:
+            config_id: id of the input configuration files
+            config: InputFileConfig object contains column info
+            db_table_name: name of the database table, which will contain 
+                           data from all files of the same type
+            input_files_name: a substring contained in all file names that 
+                              match the stucture described in the config object
         """
-        Get disctionary contains InputFileConfig object
+        self.input_files_config[config_id] = config
+        self.db_table_names[config_id] = db_table_name
+        self.input_files_name[config_id] = input_files_name
+
+    def get_configs(self):
         """
-        return self.input_files
+        Get disctionary contains all InputFileConfig object
+        """
+        return self.input_files_config
 
     def get_input_config(self, config_id) -> InputFileConfig:
         """
-        Get one InputFileConfig object with its id
+        Get one InputFileConfig object given its config id
+
+        Attributes:
+            config_id: the id of the configuration to return
         """
-        return self.input_files[config_id]
+        return self.input_files_config[config_id]
     
     def get_table_name(self, config_id):
         """
-        Return the name of the table in the database, 
+        Get the name of the table in the database, 
         given the the indetifier of the input config.
+
+        Attributes:
+            config_id: the id of the configuration
         """
         return self.db_table_names[config_id]
+    
+    def get_input_file_name(self, config_id) -> str:
+        """
+        Get the substring the file names must contains, to be imported, 
+        given the the indetifier of the input config.
+
+        Attributes:
+            config_id: the id of the configuration
+        """
+        return self.input_files_name[config_id]
 
 '''gill_2 = InputFileConfig.gillwindmaster(n_levels=2)
 trh_2 = InputFileConfig.defaultTermoigrometer(n_levels=2)
@@ -158,13 +242,27 @@ stat_info = InputFileConfig.defaultStatus()
 s_26458 = StationConfig(
     station_name="26458"
 )
-s_26458.add_input_file_config("sonic", gill_2, "sonic_26458")
-s_26458.add_input_file_config("slow", trh_2, "slow_26458")
-s_26458.add_input_file_config("stat", stat_info, "stat_26458")
+s_26458.add_input_file_config("sonic", gill_2, "sonic_26458", "TOA5_26458_sonic")
+s_26458.add_input_file_config("slow", trh_2, "slow_26458", "TOA5_26458_slow")
+s_26458.add_input_file_config("stat", stat_info, "stat_26458", "TOA5_26458_stat")'''
 
-print(s_26458)'''
+'''print(s_26458.get_configs())
+print()
+print(s_26458.get_input_config("sonic"))
+print()
+print(s_26458.get_input_file_name("sonic"))
+print()
+print(s_26458.get_table_name("sonic"))'''
+
+'''print(gill_2.get_file_cols_name())
+print()
+print(gill_2.get_file_cols_type())
+print()
+print(gill_2.get_table_cols_name())
+print()
+print(gill_2.get_table_cols_type())'''
+
 '''
-#Output:
 StationConfig(
     station_name='26458', 
     db_table_names={
@@ -172,11 +270,15 @@ StationConfig(
         'slow': 'slow_26458', 
         'stat': 'stat_26458'
     }, 
-    input_files={
+    input_files_name={
+        'sonic': 'TOA5_26458_sonic', 
+        'slow': 'TOA5_26458_slow', 
+        'stat': 'TOA5_26458_stat'
+    }, 
+    input_files_config={
         'sonic': InputFileConfig(
-            file_name='sonic',
             cols={
-                'TIMESTAMP': (<class 'datetime', 'datetime', 'DATETIME PRIMARY KEY'),
+                'TIMESTAMP': ('datetime64[ms]', 'datetime', 'DATETIME PRIMARY KEY'), 
                 'u_1': (<class 'float'>, 'u_1', 'DECIMAL(6,3)'), 
                 'v_1': (<class 'float'>, 'v_1', 'DECIMAL(6,3)'), 
                 'w_1': (<class 'float'>, 'w_1', 'DECIMAL(6,3)'), 
@@ -188,9 +290,8 @@ StationConfig(
             }
         ), 
         'slow': InputFileConfig(
-            file_name='slow', 
             cols={
-                'TIMESTAMP': (<class 'datetime', 'datetime', 'DATETIME PRIMARY KEY'),
+                'TIMESTAMP': ('datetime64[ms]', 'datetime', 'DATETIME PRIMARY KEY'), 
                 'AirTC1': (<class 'float'>, 't_1', 'DECIMAL(5,2)'), 
                 'RH1': (<class 'float'>, 'rh_1', 'DECIMAL(5,2)'), 
                 'AirTC2': (<class 'float'>, 't_2', 'DECIMAL(5,2)'), 
@@ -198,56 +299,12 @@ StationConfig(
             }
         ), 
         'stat': InputFileConfig(
-            file_name='stat', 
             cols={
-                'TIMESTAMP': (<class 'datetime', 'datetime', 'DATETIME PRIMARY KEY'),
+                'TIMESTAMP': ('datetime64[ms]', 'datetime', 'DATETIME PRIMARY KEY'), 
                 'BattV_Min': (<class 'float'>, 'battVmin', 'DECIMAL(5,2)'), 
                 'CardStatus': (<class 'str'>, 'card_status', 'VARCHAR(10)')
             }
         )
     }
 )
-'''
-
-'''
-# Ottenere il nome del file
-nome_del_file = config_gill.file_name
-print(f"Nome file: {nome_del_file}") 
-# Output: Nome file: sonic_data
-
-# Ottenere l'intero dizionario delle colonne
-tutte_le_colonne = config_gill.cols
-print(f"Dizionario completo: {tutte_le_colonne}")
-# Output: {'u_1': (<class 'float'>, 'u_1', 'DECIMAL(6,3)'), 'v_1': ... }
-
-# Accedere alla tupla di configurazione per la colonna "w_1"
-config_w1 = config_gill.cols["w_1"]
-print(f"Configurazione w_1: {config_w1}")
-# Output: Configurazione w_1: (<class 'float'>, 'w_1', 'DECIMAL(6,3)')
-
-# Estrarre la tupla per comodità
-tupla_w1 = config_gill.cols["w_1"]
-
-# Indice 0: Il tipo (es. float)
-tipo_python = tupla_w1[0]
-
-# Indice 1: Il nome della colonna nel DB (es. 'w_1')
-nome_db = tupla_w1[1]
-
-# Indice 2: Il tipo della colonna nel DB (es. 'DECIMAL(6,3)')
-tipo_db = tupla_w1[2]
-
-print(f"w_1 -> Python type: {tipo_python.__name__}, DB Name: {nome_db}, DB Type: {tipo_db}")
-# Output: w_1 -> Python type: float, DB Name: w_1, DB Type: DECIMAL(6,3)
-
-# In alternativa, puoi concatenare gli accessi (sconsigliato se la riga diventa troppo lunga):
-tipo_db_v2 = config_gill.cols["v_2"][2]
-print(f"Tipo DB per v_2: {tipo_db_v2}")
-
-for file_col_name, (py_type, db_col_name, db_type) in config_gill.cols.items():
-    print(f"Colonna nel file: {file_col_name}")
-    print(f"  - Castare a tipo: {py_type.__name__}")
-    print(f"  - Salvare nel DB come: {db_col_name}")
-    print(f"  - Tipo dato DB: {db_type}")
-    print("-" * 20)
 '''
