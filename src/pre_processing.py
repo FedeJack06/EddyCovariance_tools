@@ -4,11 +4,11 @@ import numpy as np
 import warnings
 import matplotlib.pyplot as plt
 from pathlib import Path
-from typing import Tuple, List
+from typing import Tuple
 import os
 from collections import defaultdict
 
-def import_file(input_file : str,
+'''def import_file(input_file : str,
                 measure_fields : List[str] = [],
                 clear_df : bool = False) -> Tuple[pd.DataFrame, List[str]]:
     """
@@ -63,7 +63,7 @@ def import_file(input_file : str,
     if measure_fields:
         df[measure_fields] = df[measure_fields].apply(pd.to_numeric, errors='coerce')
 
-    return df, raw_header
+    return df, raw_header'''
 
 def check_TOA5 (input_dir : str,
                 dt_max_ms : int,
