@@ -1,12 +1,13 @@
 import csv
-import pandas as pd
-import numpy as np
 import warnings
-import matplotlib.pyplot as plt
-from pathlib import Path
 from typing import Tuple
 import os
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from pathlib import Path
 from collections import defaultdict
+from .file_manager import toa5_to_df
 
 def filter_df_toa5(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -76,7 +77,7 @@ def check_TOA5 (input_dir : str,
         filepath = os.path.join(input_dir, file)
 
         try:
-            df, meta = import_file(input_file=filepath)
+            df, meta = toa5_to_df(input_file=filepath)
 
             if df.empty:
                 print(f"Analyzing: {file}")
