@@ -1,27 +1,8 @@
-from src.tob3_to_toa5 import tob3toa5
 from pathlib import Path
-import logging
-import sys
+from src.tob3_to_toa5 import tob3toa5
+from src.utils import setup_logging
 
-def setup_logging():
-    """Configures global logging: INFO to stdout, ERROR to error.log."""
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
-
-    # Handler for errors (name_scritp.out)
-    error_handler = logging.FileHandler(__file__+".log")
-    error_handler.setLevel(logging.ERROR)
-    error_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(message)s'))
-
-    # Handler for standard output (terminal)
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    stdout_handler.setLevel(logging.INFO)
-    stdout_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
-
-    root_logger.addHandler(error_handler)
-    root_logger.addHandler(stdout_handler)
-
-setup_logging()
+setup_logging(__file__)
 
 path = Path("../26428_sd")
 pattern = "2*.dat"
@@ -45,6 +26,3 @@ for file in file_trovati:
 
 if not trovato_almeno_uno:
     print("Nessun file trovato con quella stringa.")
-
-
-

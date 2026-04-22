@@ -88,9 +88,9 @@ def fill_db_toa5(con: db.DuckDBPyConnection,
         try:
             #insert entire dataframe into the table
             insert_query = df_to_db(con=con, df_in=df, db_table=db_table, map_df_db_cols=map)
-            logging.info(f"{file}: Query OK, {insert_query} row(s) affected")
+            logger.info(f"{file}: Query OK, {insert_query} row(s) affected")
         except db.Error as e:
-            logging.error(f"Error importing file: {file} | Error: {e}")
+            logger.error(f"Error importing file: {file} | Error: {e}")
 
 def fill_db_station_toa5(con: db.DuckDBPyConnection, 
                     station: StationConfig, 

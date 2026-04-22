@@ -2,12 +2,9 @@ import logging
 from pathlib import Path
 import csv
 from datetime import datetime
-
-# Find tob3-py-converter folder absolute path
-#root_dir = Path(__file__).resolve().parent.parent
-#sys.path.append(str(root_dir))
-
 from .campbell import read_cs_files as cp
+
+logger = logging.getLogger(__name__)
 
 def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="", decimals=3):
     """
@@ -39,12 +36,12 @@ def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="", decimals=3):
     try:
         data, meta = cp.read_cs_files(str(file_path), quiet=False, bycol=False)
     except Exception as e:
-        logging.error(f"Error reading {file_path}: {e}.")
+        logger.error(f"Error reading {file_path}: {e}.")
         return None
 
     # Safety check: ensure file was read correctly
     if not data or not meta:
-        logging.warning(f"File {file_path} with no data or metadata.")
+        logger.warning(f"File {file_path} with no data or metadata.")
         return None
 
     # Change the file type declaration in the first header
@@ -59,7 +56,7 @@ def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="", decimals=3):
         del meta[4] # Wait, if you delete index 1 first, the old index 5 becomes index 4. 
                     # Assuming this logic is correct for your specific use case.
 
-    logging.info(f"Writing TOA5 file to: {out_path}")
+    logger.info(f"Writing TOA5 file to: {out_path}")
 
     # Write data to the new file
     with open(out_path, mode='w', newline='', encoding='ascii') as f:
@@ -104,6 +101,6 @@ def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="", decimals=3):
                     
             writer.writerow(formatted_row)
 
-    logging.info("End convertion\n")
+    logger.info("End convertion\n")
 
     return out_path

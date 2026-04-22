@@ -9,6 +9,9 @@ from pathlib import Path
 from collections import defaultdict
 from .file_manager import toa5_to_df
 
+#import logging
+#logger = logging.getLogger(__name__)
+
 def filter_df_toa5(df: pd.DataFrame) -> pd.DataFrame:
     """
     Replace numerical entries greater than 999 with NAN. 
@@ -429,7 +432,7 @@ def despiking_TOA5_robust(file_path: str,
         The number of spikes removed.
     """
     #import file
-    df, meta = import_file(file_path)
+    df, meta = toa5_to_df(file_path)
 
     print(f"Despiking {file_path}")
 
