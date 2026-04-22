@@ -1,13 +1,13 @@
-import sys
+import logging
 from pathlib import Path
 import csv
 from datetime import datetime
 
 # Find tob3-py-converter folder absolute path
-root_dir = Path(__file__).resolve().parent.parent
-sys.path.append(str(root_dir))
+#root_dir = Path(__file__).resolve().parent.parent
+#sys.path.append(str(root_dir))
 
-from campbell import read_cs_files as cp
+from .campbell import read_cs_files as cp
 
 def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="", decimals=3):
     """
@@ -36,11 +36,15 @@ def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="", decimals=3):
     out_path = out_dir / out_filename
 
     # Read file raw from campbell datalogger
-    data, meta = cp.read_cs_files(str(file_path), quiet=False, bycol=False)
-    
+    try:
+        data, meta = cp.read_cs_files(str(file_path), quiet=False, bycol=False)
+    except Exception as e:
+        logging.error(f"Error reading {file_path}: {e}.")
+        return None
+
     # Safety check: ensure file was read correctly
     if not data or not meta:
-        print(f"Error reading data from {file_path}")
+        logging.warning(f"File {file_path} with no data or metadata.")
         return None
 
     # Change the file type declaration in the first header
@@ -55,7 +59,7 @@ def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="", decimals=3):
         del meta[4] # Wait, if you delete index 1 first, the old index 5 becomes index 4. 
                     # Assuming this logic is correct for your specific use case.
 
-    print(f"Writing TOA5 file to: {out_path}")
+    logging.info(f"Writing TOA5 file to: {out_path}")
 
     # Write data to the new file
     with open(out_path, mode='w', newline='', encoding='ascii') as f:
@@ -80,8 +84,13 @@ def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="", decimals=3):
                         formatted_row.append(item.strftime('%Y-%m-%d %H:%M:%S'))
                         
                 elif isinstance(item, str):
-                    # Clean fixed-length ASCII fields padded with null bytes (\x00)
-                    clean_str = item.replace('\x00', '').strip()
+                    # 1. Togli i null bytes
+                    clean_str = item.replace('\x00', '')
+                    # 2. Forza la conversione in ASCII ignorando/eliminando i caratteri strani
+                    clean_str = clean_str.encode('ascii', errors='ignore').decode('ascii')
+                    # 3. Togli gli spazi bianchi rimasti
+                    clean_str = clean_str.strip()
+                    
                     formatted_row.append(clean_str)
 
                 elif isinstance(item, float):
@@ -95,6 +104,6 @@ def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="", decimals=3):
                     
             writer.writerow(formatted_row)
 
-    print("End convertion\n")
+    logging.info("End convertion\n")
 
     return out_path
