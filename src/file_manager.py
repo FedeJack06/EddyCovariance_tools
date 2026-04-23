@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 import logging
 from typing import List, Dict, Tuple
 import pandas as pd
@@ -6,7 +6,7 @@ from .config import InputFileConfig, StationConfig
 
 logger = logging.getLogger(__name__)
 
-def toa5_to_df(input_file : str,
+def toa5_to_df(input_file : str | Path,
                config: InputFileConfig,
                date_index: bool = False) -> Tuple[pd.DataFrame, List[str]]:
     """
@@ -19,7 +19,7 @@ def toa5_to_df(input_file : str,
 
     Parameters
     ----------
-    input_file: str
+    input_file: str | Path
         path of TOA5 file
     config: InputFileConfig
         configuration file input, with all the info about the 
@@ -35,6 +35,8 @@ def toa5_to_df(input_file : str,
         - The file as a dataframe.
         - List of strings containing the original 4 header lines.
     """
+    #if string, convert to Path object
+    input_file = Path(input_file)
 
     #extract 4 line header from file
     raw_header = []
@@ -52,7 +54,7 @@ def toa5_to_df(input_file : str,
     try:
         df = df.astype(dtype=types, errors='raise')
     except Exception as e:
-        logger.error(f"Error pandas dtype on file {input_file}: {e}")
+        logger.error(f"Error pandas dtype on file {input_file.name}: {e}")
         pass
 
     #set datetime column as index
@@ -63,7 +65,7 @@ def toa5_to_df(input_file : str,
 
     return df, raw_header
 
-def csv_to_df(input_file : str,
+def csv_to_df(input_file : str | Path,
                config: InputFileConfig,
                index: str = None) -> pd.DataFrame:
     """
@@ -77,7 +79,7 @@ def csv_to_df(input_file : str,
 
     Parameters
     ----------
-    input_file: str
+    input_file: str | Path
         path of csv file
     config: InputFileConfig
         configuration file input, with all the info about the 
@@ -92,6 +94,8 @@ def csv_to_df(input_file : str,
     pd.DataFrame
         Dataframe containing the columns choosen in InputConfigFile.
     """
+    #if string, convert to Path object
+    input_file = Path(input_file)
 
     #get pandas dtype for each column from the config object
     types = config.get_file_cols_type()
@@ -109,78 +113,92 @@ def csv_to_df(input_file : str,
         df.drop(columns=[index], inplace=True, errors='ignore')
 
     return df
-
-def get_files(folder_path: str,
-              start_name: str, 
-              end_name: str) -> List:
-    """
-    Get a sorted list of files from a folder. The name of the files
-    must start with "start_name" and end with "end_name".
-    The search is case-sensitive.
-    The files are returned as String with their relative path.
-
-    Parameters
-    ----------
-    folder_path: str
-        Search is perfomed in this path.
-    start_name: str
-        First part of the filename to be selected.
-    end_name: str
-        Final part of the filename to be selected.
-
-    Returns
-    -------
-    List[str]
-        A list of the selected files with their relative path.
-    """
-    try:
-        # get a sorted list of files that start and end with the parameters
-        files = sorted([
-            os.path.join(folder_path, f) 
-            for f in os.listdir(folder_path)
-            if f.startswith(start_name) and f.endswith(end_name)
-        ])
-        # how many files found
-        logger.info(f"Find {len(files)} file starting with {start_name} and ending \
-                    with {end_name}, in {folder_path}.")
-        return files
-    except FileNotFoundError:
-        logger.error(f"Error: folder {folder_path} not found.")
-        return []
     
-def get_files_sub(folder_path: str,
-                  substring: str) -> List:
+def get_files_substring(folder_path: str | Path,
+                        substring: str) -> List[Path]:
     """
     Get a sorted list of files from a folder. The name of the files
     must contains the substring passed.
     The search is case-insensitive.
-    The files are returned as String with their relative path.
+    The files are returned as List of file as Path object.
 
     Parameters
     ----------
-    folder_path: str
+    folder_path: str or Path
         Serach is perfomed in this path.
     substring: str
         Substring contained in the name of the searched files.
 
     Returns
     -------
-    List[str]
-        A list of the selected files with their relative path.
+    List[Path]
+        A list of files (Path object).
     """
+    #if string, convert to Path object
+    folder = Path(folder_path)
+
+    if not folder.exists() or not folder.is_dir():
+        logger.error(f"Error: folder {folder} not found or is not a directory.")
+        return []
+    
+    try:
+        #get a list of only file in folder
+        files = [
+            f for f in folder.iterdir()
+            if f.is_file() and substring.lower() in f.name.lower()
+        ]
+        
+        #order A -> Z
+        files.sort()
+        
+        logger.info(f"Found {len(files)} files matching '*{substring}*' in {folder}.")
+        return files
+        
+    except Exception as e:
+        logger.error(f"Error reading folder {folder}: {e}")
+        return []
+
+def get_files_pattern(folder_path: str | Path,
+                      pattern: str) -> List[Path]:
+    """
+    Get a sorted list of files from a folder matching a wildcard pattern.
+    You can use "*" to substitute any char.
+    The search is CASE-SENSITIVE.
+
+    Parameters
+    ----------
+    folder_path: str or Path
+        Search is performed in this path.
+    pattern: str
+        Wildcard pattern to match (e.g., 'TOA5py_Sonic*.dat').
+
+    Returns
+    -------
+    List[Path]
+        A list of the selected files as pathlib.Path objects.
+    """
+    #if string, convert to Path object
+    folder = Path(folder_path)
+    
+    if not folder.exists() or not folder.is_dir():
+        logger.error(f"Error: folder {folder} not found or is not a directory.")
+        return []
 
     try:
-        # get a sorted list of files that contains the substring in their name
-        files = sorted([
-            os.path.join(folder_path, f)
-            for f in os.listdir(folder_path) 
-            if substring.lower() in f.lower()
-        ])
-        # how many files found
-        logger.info(f"Find {len(files)} file *{substring}*... in {folder_path}.")
+        # Find only files, based on a wildcard pattern
+        files = [
+            f for f in folder.glob(pattern) 
+            if f.is_file()
+        ]
+        
+        #order A -> Z
+        files.sort()
+        
+        logger.info(f"Found {len(files)} files matching '{pattern}' in {folder}.")
         return files
-    except FileNotFoundError:
-        logger.error(f"Error: folder {folder_path} not found.")
+        
+    except Exception as e:
+        logger.error(f"Error reading folder {folder}: {e}")
         return []
     
 def get_files_from_station(folder_path: str, 
@@ -219,7 +237,7 @@ def get_files_from_station(folder_path: str,
     files_substring = station.input_files_name
     for config_id, substring in files_substring.items():
         #get the list of files of the same type (the same input config)
-        list_of_file = get_files_sub(folder_path=folder_path, substring=substring)
+        list_of_file = get_files_pattern(folder_path=folder_path, pattern=substring)
         #output
         dict_files[config_id] = list_of_file
 

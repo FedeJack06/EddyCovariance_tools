@@ -2,6 +2,7 @@ import logging
 import duckdb as db
 import pandas as pd
 from typing import Dict, List
+from pathlib import Path
 from .config import InputFileConfig, StationConfig
 from .file_manager import get_files_from_station, toa5_to_df
 from .pre_processing import filter_df_toa5
@@ -58,7 +59,7 @@ def df_to_db(con: db.DuckDBPyConnection,
 
 def fill_db_toa5(con: db.DuckDBPyConnection, 
                  db_table: str, 
-                 file_list: List, 
+                 file_list: List[Path],
                  config: InputFileConfig) -> None:
     """
     Fills a database table with a list of TOA5 files.
@@ -69,8 +70,9 @@ def fill_db_toa5(con: db.DuckDBPyConnection,
         connection to the database
     db_table: str
         the name of the table to fill
-    file_list: List
-        a list containing the files to put into the database table
+    file_list: List[Path]
+        a list of Path object, containing the files to put 
+        into the database table
     config: InputFileConfig
         configuration file input, with all the info about the 
         columns to be inported.
@@ -88,9 +90,9 @@ def fill_db_toa5(con: db.DuckDBPyConnection,
         try:
             #insert entire dataframe into the table
             insert_query = df_to_db(con=con, df_in=df, db_table=db_table, map_df_db_cols=map)
-            logger.info(f"{file}: Query OK, {insert_query} row(s) affected")
+            logger.info(f"{file.name}: Query OK, {insert_query} row(s) affected")
         except db.Error as e:
-            logger.error(f"Error importing file: {file}: {e}")
+            logger.error(f"Error importing file: {file.name}: {e}")
 
 def fill_db_station_toa5(con: db.DuckDBPyConnection, 
                     station: StationConfig, 

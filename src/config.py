@@ -168,8 +168,8 @@ class StationConfig:
     1) An ID that identify the type of input file (e.g. sonic, slow, stat)
     2) A dictionary that associates the config_id and the name of the database table,
        which will contain data from all files of the same type
-    3) A dictionary that associates the config_id and the substring contained in
-       all file names of the same type
+    3) A dictionary that associates the config_id and the pattern filename in
+       all file names of the same type (e.g. S*.dat or *2026-05-10*)
 
     Attributes:
         station_name: name/id of the station
@@ -193,8 +193,9 @@ class StationConfig:
             config: InputFileConfig object contains column info
             db_table_name: name of the database table, which will contain 
                            data from all files of the same type
-            input_files_name: a substring contained in all file names that 
+            input_files_name: a wildcard pattern contained in all file names that 
                               match the stucture described in the config object
+                              (e.g. S*.dat or *2026-05-10*)
         """
         self.input_files_config[config_id] = config
         self.db_table_names[config_id] = db_table_name
