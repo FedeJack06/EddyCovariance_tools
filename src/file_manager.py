@@ -49,7 +49,11 @@ def toa5_to_df(input_file : str,
     #remove column not specified in the input files configuration
     df = df.filter(items=config.get_file_cols_name())
     #convert the column dtypes to dtypes specified in the config
-    df = df.astype(dtype=types, errors='raise')
+    try:
+        df = df.astype(dtype=types, errors='raise')
+    except Exception as e:
+        logger.error(f"Error pandas dtype on file {input_file}: {e}")
+        pass
 
     #set datetime column as index
     if date_index:
