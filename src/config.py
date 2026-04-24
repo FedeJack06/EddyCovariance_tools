@@ -17,6 +17,8 @@ class InputFileConfig:
     3) Set name of the same column in the table of the database (second tuple entry)
     4) Set column SQL type the column should have in the database (third tuple entry)
 
+    Set the time interval in milliseconds between two measure in the input files.
+
     Three default profiles of input file are present, you can set these profile with
     the three methods. They refer to TOA5 input files generated from standard
     eddy covariance experiment.
@@ -27,21 +29,24 @@ class InputFileConfig:
               the name of the column in the database table (can be different from file),
               the SQL type of the column in the table (used to create the table). 
     """
+    sampling_rate_ms: float
     cols: Dict[str, Tuple[type, str, str]]
 
     @classmethod
-    def gillwindmaster(cls, n_levels: int = 1):
+    def gillwindmaster(cls, n_levels: int = 1, sampling_rate_ms: float = 50):
         """
         Set the configuration for standard sonic anemometers, with n vertical 
         levels (Gill Windmaster). For each level (identified by the number i) four
         variable are expected: u_i, v_i, w_i, three components of the wind and 
         Ts_i the sonic temperature. Gill Windmaster, with high precision enabled,
         generate measures with three decimal digits. The maximum value is 50 m/s so
-        the database type for sonic measure can be DECIMAL(6,3), to save space.
+        the database type for sonic measure can be DECIMAL(6,3), to save space. 
+        Set the sampling rate for this type of measure.
 
         Attributes:
             n_levels: number of vertical levels or number of sonic instruments,
                       recorded in the same file.
+            sampling_rate_ms: milliseconds between two measure. Default 50ms (20Hz).
         """
         if n_levels <= 0:
             raise ValueError("Number of level/instruments must be non zero and positive.")
@@ -59,22 +64,25 @@ class InputFileConfig:
         
         # Create gill object
         return cls(
-            cols = cols_gill_windmaster
+            cols = cols_gill_windmaster,
+            sampling_rate_ms = sampling_rate_ms
         )
     
     @classmethod
-    def defaultTermoigrometer(cls, n_levels: int = 1):
+    def defaultTermoigrometer(cls, n_levels: int = 1, sampling_rate_ms: float = 1000):
         """
         Set the configuration for standard termoigrometers, with n vertical 
         levels. For each level (identified by the number i) two
         variable are expected: AirTC{i}, air temperature and RH{i}, air relative 
         humidity. Standard slow termoigrometers (1Hz samplig rate)
         generate measures with one/two decimal digits, so the database
-        type for these measure can be DECIMAL(5,2), to save space.
+        type for these measure can be DECIMAL(5,2), to save space. 
+        Set the sampling rate for this type of measure.
 
         Attributes:
             n_levels: number of vertical levels or number of termoigrometers,
                       recorded in the same file.
+            sampling_rate_ms: milliseconds between two measure. Default 1s (1Hz).
         """
         if n_levels <= 0:
             raise ValueError("Number of level/instruments must be non zero and positive.")
@@ -89,16 +97,20 @@ class InputFileConfig:
             cols_trh[f"RH{i}"] = (float, f"rh_{i}", "DECIMAL(5,2)")
 
         return cls(
-            cols = cols_trh
+            cols = cols_trh,
+            sampling_rate_ms = sampling_rate_ms
         )
 
     @classmethod
-    def defaultStatus(cls):
+    def defaultStatus(cls, sampling_rate_ms: float = 1000):
         """
         Set the configuration to read the status files. They contain info
-        about the status of the station, for example a Campbell datalogger.
+        about the status of the station, for example a Campbell datalogger. 
         Here an example with battery voltage and info about the SD card
-        where files are stored.
+        where files are stored. Set the sampling rate for this type of measure.
+
+        Attributes:
+            sampling_rate_ms: milliseconds between two measure. Default 1s (1Hz).
         """
         cols_status = {
             "TIMESTAMP" : ('datetime64[ms]', "datetime", "DATETIME PRIMARY KEY"),
@@ -107,7 +119,8 @@ class InputFileConfig:
         }
 
         return cls( 
-            cols = cols_status
+            cols = cols_status,
+            sampling_rate_ms = sampling_rate_ms
         )
     
     def get_file_cols_name(self) -> List[str]:
