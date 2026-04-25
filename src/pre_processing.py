@@ -1,16 +1,15 @@
 import csv
 import warnings
 from typing import Tuple
-import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
-from collections import defaultdict
-from .file_manager import toa5_to_df
+from .file_manager import toa5_to_df, get_files_pattern
+from .config import InputFileConfig
 
-#import logging
-#logger = logging.getLogger(__name__)
+import logging
+logger = logging.getLogger(__name__)
 
 def filter_df_toa5(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -35,275 +34,61 @@ def filter_df_toa5(df: pd.DataFrame) -> pd.DataFrame:
     df[numeric_cols] = df[numeric_cols].mask(df[numeric_cols] > 999)
     return df
 
-def check_TOA5 (input_dir : str,
-                dt_max_ms : int,
-                start_name : str,
-                end_name : str,
-                out_file : bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def check_df(df: pd.DataFrame,
+             sampling_rate_ms: float) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Check number of NAN in raw converted TOA5 file and time gaps between rows.
-    Usefull to check the status of incoming file from Station direclty on the server.
+    Find the time gaps in the dataframe index. The index must be a timestamp.
+    Find the rows with at least one NAN values.
+    Find the time duration of interval with consecutive NAN values.
 
     Parameters
     ----------
-    input_dir: str
-        path to directory containing all TOA5 from Stations.
-    dt_max_ms: int
-        max time gaps between consequent rows in milliseconds.
-    start_name: str
-        beginning of filename to analyze, to select files from folder.
-    end_name: str
-        ending of filename to analyze, to select files from folder.
-    out_file: bool
-        create CSV file with NAN rows and time gaps info. Defaulf False.
-
+    df: pd.DataFrame
+        Pandas dataframe to check
+    sampling_rate_ms: float
+        Expected dt in milliseconds between measure
+    
     Returns
     -------
-    Tuple[pd.DataFrame, pd.DataFrame]
-        - First pandas Dataframe with all the time gaps found into the file.
-        - Second pandas Dataframe with all rows containing at least one NAN record.
+    Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
+        - First Pandas df with the time gaps in seconds between records,
+          greater than sampling rate
+        - Second Pandas df with rows containing at least one NAN record.
+        - Third Pandas df with info about interval of consecutive NAN values.
+          Contains the start and end times of the intervals and the number
+          of consecutive NAN measures.
     """
+    if not df.empty:
+        # Calc dt in milliseconds between rows in file
+        delta_t = df.index.diff().total_seconds() * 1000
 
-    # list of dataframe
-    df_gaps_list = []
-    df_nan_list = []
-
-    # get all file order by AZ
-    files = sorted([f for f in os.listdir(input_dir) if f.startswith(start_name) and f.endswith(end_name)])
-    print(f"Find {len(files)} file")
-
-    # last row from previous file
-    last_row_prev_file = None
-    last_file = None
-
-    for file in files:
-        filepath = os.path.join(input_dir, file)
-
-        try:
-            df, meta = toa5_to_df(input_file=filepath)
-
-            if df.empty:
-                print(f"Analyzing: {file}")
-                print(f"Empty file, skipping\n")
-                continue
+        # Append rows with time gaps to a list
+        row_with_gaps = pd.DataFrame({
+            "TIMESTAMP": df.index[delta_t > sampling_rate_ms],
+            "dtSec": delta_t[delta_t > sampling_rate_ms].to_numpy()/1000
+        })
             
-            # Comparison between last timestamo in previous file and first timestamp of current file
-            if last_row_prev_file is not None:
-                ts_prev = last_row_prev_file.index[0]
-                ts_first = df.index[0]
-                
-                if pd.notna(ts_prev) and pd.notna(ts_first):
-                    dt_ms = (ts_first - ts_prev).total_seconds() * 1000
-                    if dt_ms > dt_max_ms:
-                        print(f"Analyzing: {file}")
-                        print(f"  ⚠️ Time gap between {last_file} and {file}: dt = {dt_ms/1000:.2f} s")
-                        row = pd.DataFrame({
-                            "file": [f"{last_file} → {file}"],
-                            "dtSec": [dt_ms / 1000]
-                        })
-                        df_gaps_list.append(row)
-                else:
-                    print(f"Analyzing: {file}")
-                    print("  ⚠️ Missing timestamp between consecutive files")
-            
-            # Calc dt in milliseconds between rows in file
-            delta_t = df.index.diff().total_seconds() * 1000
-            
-            # Find index with dt > threshold
-            time_gaps_index = delta_t[delta_t > dt_max_ms]
+        # Find rows with at least one NAN
+        nan_df = df[df.isna().any(axis=1)]
 
-            # Append rows with time gaps
-            if len(time_gaps_index) > 0:
-                row_with_gaps = pd.DataFrame({
-                            "file": [file],
-                            "dtSec": delta_t[delta_t > dt_max_ms].to_numpy()/1000,
-                            "TIMESTAMP": df.index[delta_t > dt_max_ms]
-                        })
-                df_gaps_list.append(row_with_gaps)
-                print(f"Analyzing: {file}")
-                print(f"  ✓ Find {len(row_with_gaps)} rows with delta t > {dt_max_ms} ms")
-            
-            # Find rows with at least one NAN
-            nan_df = df[df.eq('NAN').any(axis=1)]
-            if len(nan_df) > 0:
-                df_nan_list.append(nan_df)
+        # Find the duration of intervals with consecutive NANs
+        dt = pd.to_timedelta(sampling_rate_ms, unit='ms')
+        time_diff = nan_df.index.to_series().diff()
+        is_new_block = time_diff != dt
+        block_id = is_new_block.cumsum()
+        duration_nan = df.groupby(block_id).apply(
+            lambda x: pd.Series({
+                'start': x.index[0],
+                'end': x.index[-1],
+                'n_sample': len(x),
+            })
+        )
+        
+        return row_with_gaps, nan_df, duration_nan
 
-            # Update values for next comparison between consecutive files
-            last_row_prev_file = df.iloc[[-1]]
-            last_file = file
-
-        except Exception as e:
-            print(f"Analyzing: {file}")
-            print(f"  ✗ Error: {e}")
-
-    info = meta[0].strip().split('","')
-    # Build df
-    if df_gaps_list:
-        df_gaps = pd.concat(df_gaps_list, ignore_index=True)
-        print(f"\n{'='*60}")
-        print(f"TOTAL: {len(df_gaps)} rows with delta t > {dt_max_ms} ms (include gaps between files)")
-        print(f"{'='*60}\n")
-        print(df_gaps)
-        if out_file:
-            out_path = os.path.join(input_dir, f'time_gaps_{info[1]}_{info[7][:-1]}.csv')
-            df_gaps.to_csv(out_path, index=False)
     else:
-        print(f"\n{'='*60}")
-        print("No time gaps found.")
-        print(f"{'='*60}\n")
-        df_gaps = pd.DataFrame()
-
-    if df_nan_list:
-        df_nan = pd.concat(df_nan_list, ignore_index=True)
-        print("\n" + "="*60)
-        print(f"TOTAL: {len(df_nan)} rows with NAN values")
-        print("="*60 + "\n")
-        print(df_nan)
-        if out_file:
-            out_path = os.path.join(input_dir, f'nan_{info[1]}_{info[7][:-1]}.csv')
-            df_nan.to_csv(out_path, index=False)
-    else:
-        print(f"\n{'='*60}")
-        print("No NAN values found")
-        print(f"{'='*60}\n")
-        df_nan = pd.DataFrame()
-
-    return df_gaps, df_nan
-
-def daily_file_from_server(input_dir: str, 
-                          output_dir: str,
-                          start_name : str,
-                          end_name : str):
-    """
-    From fiel with DATETIME in the name
-    Raggruppa i file TOA5 orari per giorno e tipologia (Slow/Sonic) 
-    e li concatena in file giornalieri.
-    """
-    input_path = Path(input_dir)
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    # Dizionario per raggruppare i file. Formato: {('Slow', '2026-03-26'): [lista_file]}
-    file_groups = defaultdict(list)
-
-    # 1. Scansiona e raggruppa i file
-    for file_path in input_path.glob(f'{start_name}*{end_name}'):
-        nome_file = file_path.name
-        parti = nome_file.split('_')
-        
-        # Ci aspettiamo nomi come: TOA5_Slow_2026-03-26_00-01-06.dat
-        if len(parti) >= 4:
-            tipo_file = parti[1]          # 'Slow' o 'Sonic'
-            data_file = parti[2]          # '2026-03-26'
-            
-            file_groups[(tipo_file, data_file)].append(file_path)
-
-    # 2. Concatena i file raggruppati
-    for (tipo_file, data_file), files in file_groups.items():
-        # Ordina i file alfabeticamente (che corrisponde all'ordine cronologico grazie ai nomi)
-        files.sort()
-        
-        nome_output = f"TOA5_{tipo_file}_{data_file}_Daily.dat"
-        output_file_path = output_path / nome_output
-        
-        print(f"Creazione di {nome_output} (unendo {len(files)} file)...")
-        
-        with open(output_file_path, 'w', encoding='utf-8') as outfile:
-            for indice, file_orario in enumerate(files):
-                with open(file_orario, 'r', encoding='utf-8') as infile:
-                    # Se è il primo file, scrivi tutto (incluso l'header di 4 righe)
-                    if indice == 0:
-                        outfile.write(infile.read())
-                    # Per i file successivi, salta le prime 4 righe
-                    else:
-                        for _ in range(4):
-                            next(infile, None)  # Salta la riga
-                        # Scrivi il resto dei dati
-                        for riga in infile:
-                            outfile.write(riga)
-
-    print("Concatenazione completata!")
-
-# Esempio di utilizzo:
-# crea_file_giornalieri('./cartella_dati_orari', './cartella_dati_giornalieri')
-
-import os
-from pathlib import Path
-from collections import defaultdict
-
-def smista_e_unisci_sonic_per_contenuto(input_dir: str, output_dir: str):
-    """
-    Legge il timestamp reale all'interno dei file Sonic, li raggruppa per giorno 
-    e crea i file giornalieri unificati.
-    """
-    input_path = Path(input_dir)
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    # Dizionario per raggruppare i file per data reale: {'2026-03-25': [lista_file]}
-    file_per_data = defaultdict(list)
-    
-    print("Fase 1: Lettura del contenuto dei file per estrarre la data esatta...")
-    
-    # Trova tutti i file nella cartella (puoi filtrare per 'Sonic' se necessario)
-    for file_path in input_path.glob('*.dat'):
-        # Assicuriamoci che sia un file Sonic guardando la prima riga se vogliamo essere pignoli, 
-        # oppure diamo per scontato che gli passi la cartella giusta.
-        
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                # Salta le 4 righe di intestazione
-                for _ in range(4):
-                    f.readline()
-                
-                # Leggi la prima riga di dati veri
-                prima_riga_dati = f.readline()
-                
-                if not prima_riga_dati:
-                    continue # File vuoto, saltalo
-                
-                # La riga è tipo: "2026-03-25 23:00:00.05",21451954,4.595,...
-                # Dividiamo per virgola, prendiamo il primo elemento, togliamo le virgolette
-                timestamp_str = prima_riga_dati.split(',')[0].replace('"', '')
-                
-                # Ora abbiamo "2026-03-25 23:00:00.05". Prendiamo solo la data (prima dello spazio)
-                data_reale = timestamp_str.split(' ')[0] 
-                
-                file_per_data[data_reale].append(file_path)
-                
-        except Exception as e:
-            print(f"Errore nella lettura di {file_path.name}: {e}")
-
-    print(f"Trovati dati per {len(file_per_data)} giorni diversi. Inizio unione...")
-
-    # Fase 2: Unione dei file giornalieri (identica a prima, ma ora basata sulla data certa)
-    for data_reale, files in file_per_data.items():
-        # Ordiniamo i file: essendo basati sul timestamp orario, ordinarli alfabeticamente 
-        # per nome (che contiene l'ora) di solito basta per metterli in ordine cronologico.
-        files.sort()
-        
-        nome_output = f"TOA5_Sonic_{data_reale}_Daily.dat"
-        output_file_path = output_path / nome_output
-        
-        print(f"-> Creazione di {nome_output} ({len(files)} file orari uniti)")
-        
-        with open(output_file_path, 'w', encoding='utf-8') as outfile:
-            for indice, file_orario in enumerate(files):
-                with open(file_orario, 'r', encoding='utf-8') as infile:
-                    if indice == 0:
-                        # Primo file del giorno: scrivi tutto, compreso l'header TOA5
-                        outfile.write(infile.read())
-                    else:
-                        # File successivi: salta le 4 righe di header e copia i dati
-                        for _ in range(4):
-                            next(infile, None)
-                        for riga in infile:
-                            outfile.write(riga)
-
-    print("Completato con successo!")
-
-# Esempio di utilizzo:
-# smista_e_unisci_sonic_per_contenuto('./dati_orari', './dati_giornalieri_sicuri')
+        logger.error("Empty dataframe.")
+        return pd.DataFrame(), pd.DataFrame()
 
 def despiking_series_robust(input_series: pd.Series, 
                             robust_std_dev: float, 
@@ -396,84 +181,6 @@ def despiking_series_robust(input_series: pd.Series,
 
     return timeseries, count_spike
 
-def despiking_TOA5_robust(file_path: str,
-                          out_path: str, 
-                          robust_std_dev: float, 
-                          n_window_points: int, 
-                          show_plot: bool = False) -> str:
-    """
-    Despike data directly from a TOA5 format file.
-    Put despiked data into a similar TOA5 format: the first header row info is manteined.
-    Info on the measurmemts units is lost in the new header.
-    Applies a moving-window robust despiking algorithm.
-    If a record exceeds N times the robust standard deviation, it's marked as spike.
-    
-    Detected spikes are replaced with the local running median. 
-
-    Parameters
-    ----------
-    file_path : str
-        Path to TOA5 data file from campbell datalogger
-    out_path : str
-        Output dir where put despiked file
-    robust_std_dev : float
-        Threshold multiplier for the robust standard deviation.
-    n_window_points : int
-        Number of periods for the rolling window.
-    show_plot : bool, optional
-        If True, displays a plot showing the original series, the dynamic bounds, 
-        and the identified spikes. Default is False.
-
-    Returns
-    -------
-    pd.Series
-        The despiked series.
-    int
-        The number of spikes removed.
-    """
-    #import file
-    df, meta = toa5_to_df(file_path)
-
-    print(f"Despiking {file_path}")
-
-    # select relevant column and mask row with error (from Gill Windmaster instrument) 
-    columns_meas = ['u_1', 'v_1', 'w_1', 'Ts_1']
-    condition = (df['SS_1'] != "0B") & (df['SS_1'] != "00") 
-    df[columns_meas] = df[columns_meas].mask(condition)
-
-    # despiking on measurments column
-    for c in columns_meas:
-        despiked_series, n_spikes = despiking_series_robust(
-            df[c], 
-            robust_std_dev=robust_std_dev, 
-            n_window_points=n_window_points, 
-            show_plot=show_plot
-        )
-        
-        # replace column with despiked column
-        df[c] = despiked_series
-        
-        print(f"Column {c}: {n_spikes} spike replaced.")
-
-    #output file info
-    print(f"Number of records in output file: {len(df)}.")
-    print(f"First timestamp: {df.index.min()}")
-    print(f"Lasr timestamp: {df.index.max()}")
-
-    # output path
-    in_path = Path(file_path)
-    out_path = Path(out_path)
-    # new filename
-    out_path = out_path / f"desp_{in_path.stem}{in_path.suffix}"
-
-    # Save to file header info and data despiked
-    with open(out_path, 'w', encoding='utf-8') as f:
-        f.writelines(meta[0])
-
-    df.to_csv(out_path, mode='a', sep=",")
-
-    return str(out_path)
-
 def average_toa5(input_file, output_file, freq='10min'):
     """
     Reads a Campbell Scientific TOA5 file, averages the data based on a defined 
@@ -526,3 +233,135 @@ def average_toa5(input_file, output_file, freq='10min'):
 # --- EXAMPLE USAGE ---
 # average_toa5('slow_data.dat', 'slow_data_avg.dat', freq='1min')
 # average_toa5('fast_data.dat', 'fast_data_avg.dat', freq='10min')
+
+def check_TOA5(input_dir : str | Path,
+               pattern: str,
+               config: InputFileConfig,
+               out_file : bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Check number of NAN in raw converted TOA5 file and time gaps between rows.
+    Usefull to check the status of incoming file from Station direclty on the server.
+
+    Parameters
+    ----------
+    input_dir: str
+        path to directory containing all TOA5 from Stations.
+    pattern: str
+        Wildcard pattern name of the files (e.g. S*.dat)
+    config: InputFileConfig
+        Object with all the info about the columns to be imported.
+        Contains the correct sampling rate for this type of files.
+    out_file: bool
+        create CSV file with NAN rows and time gaps info. Defaulf False.
+
+    Returns
+    -------
+    Tuple[pd.DataFrame, pd.DataFrame]
+        - First pandas Dataframe with all the time gaps found into the file.
+        - Second pandas Dataframe with all rows containing at least one NAN record.
+    """
+    # list of dataframe
+    df_gaps_list = []
+    df_nan_list = []
+
+    # get all file order by AZ
+    files = get_files_pattern(input_dir, pattern)
+
+    # get dt for this type of files
+    sampling_rate = config.sampling_rate_ms
+
+    # last row from previous file
+    last_row_prev_file = None
+    last_file = None
+
+    for file in files:
+        try:
+            df, meta = toa5_to_df(input_file=file, config=config, date_index=True)
+
+            if df.empty:
+                logger.error(f"Analyzing {file}: empty file, skipping...")
+                continue
+            
+            # Comparison between last timestamp in previous file and first timestamp of current file
+            if last_row_prev_file is not None:
+                ts_prev = last_row_prev_file.index[0]
+                ts_first = df.index[0]
+
+                # calc delta t
+                if pd.notna(ts_prev) and pd.notna(ts_first):
+                    dt_ms = (ts_first - ts_prev).total_seconds() * 1000 #dt in ms between files
+                    if dt_ms > sampling_rate: # gap found
+                        logger.error(f"Time gap found between {last_file.name} and {file.name}: dt = {dt_ms/1000:.2f} s")
+                        #append gap info to a list
+                        row = pd.DataFrame({
+                            "file": [f"{last_file} → {file}"],
+                            "dtSec": [dt_ms / 1000]
+                        })
+                        df_gaps_list.append(row)
+                else:
+                    logger.error(f"Analyzing {file.name}: Missing timestamp between consecutive files")
+            
+            # Calc dt in milliseconds between rows in file
+            delta_t = df.index.diff().total_seconds() * 1000
+            
+            # Find index with dt > threshold
+            time_gaps_index = delta_t[delta_t > sampling_rate]
+
+            # Append rows with time gaps to a list
+            if len(time_gaps_index) > 0:
+                row_with_gaps = pd.DataFrame({
+                            "file": [file],
+                            "dtSec": delta_t[delta_t > sampling_rate].to_numpy()/1000,
+                            "TIMESTAMP": df.index[delta_t > sampling_rate]
+                        })
+                df_gaps_list.append(row_with_gaps)
+                logger.error(f"Analyzing {file}: Found {len(row_with_gaps)} rows with delta t > {sampling_rate} ms")
+            
+            # Find rows with at least one NAN
+            nan_df = df[df.eq('NAN').any(axis=1)]
+            if len(nan_df) > 0:
+                df_nan_list.append(nan_df)
+
+            # Update values for next comparison between consecutive files
+            last_row_prev_file = df.iloc[[-1]]
+            last_file = file
+
+        except Exception as e:
+            logger.error(f"Analyzing {file} Error: {e}")
+
+    # Output of the results
+    info = meta[0].strip().split('","')
+    # Build df
+    if df_gaps_list:
+        df_gaps = pd.concat(df_gaps_list, ignore_index=True)
+        logger.info(f"\n{'='*60}")
+        logger.info(f"TOTAL: {len(df_gaps)} rows with delta t > {sampling_rate} ms (include gaps between files)")
+        logger.info(f"{'='*60}\n")
+        logger.info(df_gaps)
+        # result in a file named time_gaps
+        if out_file:
+            out_path = input_dir / f'time_gaps_{info[1]}_{info[7][:-1]}.csv'
+            df_gaps.to_csv(out_path, index=False)
+    else:
+        logger.info(f"\n{'='*60}")
+        logger.info("No time gaps found.")
+        logger.info(f"{'='*60}\n")
+        df_gaps = pd.DataFrame()
+
+    if df_nan_list:
+        df_nan = pd.concat(df_nan_list, ignore_index=True)
+        logger.info("\n" + "="*60)
+        logger.info(f"TOTAL: {len(df_nan)} rows with NAN values")
+        logger.info("="*60 + "\n")
+        logger.info(df_nan)
+        # result in a file named nan_
+        if out_file:
+            out_path = input_dir / f'nan_{info[1]}_{info[7][:-1]}.csv'
+            df_nan.to_csv(out_path, index=False)
+    else:
+        logger.info(f"\n{'='*60}")
+        logger.info("No NAN values found")
+        logger.info(f"{'='*60}\n")
+        df_nan = pd.DataFrame()
+
+    return df_gaps, df_nan

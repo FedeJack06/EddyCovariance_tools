@@ -23,7 +23,7 @@ def toa5_to_df(input_file : str | Path,
         path of TOA5 file
     config: InputFileConfig
         configuration file input, with all the info about the 
-        columns to be inported.
+        columns to be imported.
     date_index: bool
         If true sets the datetime column ("TIMESTAMP") as index and
         removes it from df columns. Default False, so keeps the 
