@@ -34,7 +34,7 @@ def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="", decimals=3):
 
     # Read file raw from campbell datalogger
     try:
-        data, meta = cp.read_cs_files(str(file_path), quiet=False, bycol=False)
+        data, meta = cp.read_cs_files(file_path, quiet=False, bycol=False)
     except Exception as e:
         logger.error(f"Error reading {file_path}: {e}.")
         return None
