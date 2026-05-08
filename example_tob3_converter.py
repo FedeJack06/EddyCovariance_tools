@@ -15,8 +15,7 @@ working_dir = Path("")
 pattern = "*2026-04-1*"
 
 # get files list
-files = working_dir.glob(pattern) #.rglob if you want a recursively search
-files.sort()
+files = sorted(working_dir.glob(pattern)) #.rglob if you want a recursively search
 
 find_files = False
 for file in files:
