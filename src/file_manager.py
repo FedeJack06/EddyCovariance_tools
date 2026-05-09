@@ -2,6 +2,7 @@ from pathlib import Path
 import logging
 from typing import List, Dict, Tuple
 import pandas as pd
+from natsort import natsorted
 from .config import InputFileConfig, StationConfig
 
 logger = logging.getLogger(__name__)
@@ -186,13 +187,9 @@ def get_files_pattern(folder_path: str | Path,
 
     try:
         # Find only files, based on a wildcard pattern
-        files = [
-            f for f in folder.glob(pattern) 
-            if f.is_file()
-        ]
-        
-        #order A -> Z
-        files.sort()
+        # sorted based on filename
+        files = natsorted([f for f in folder.glob(pattern) if f.is_file()], 
+                          key=lambda f: f.name)
         
         logger.info(f"Found {len(files)} files matching '{pattern}' in {folder}.")
         return files

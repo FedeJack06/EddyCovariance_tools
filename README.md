@@ -18,3 +18,4 @@ Required:
 - pandas
 - numpy
 - duckdb
+- natsort
