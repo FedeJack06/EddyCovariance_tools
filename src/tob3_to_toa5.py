@@ -6,12 +6,16 @@ from .campbell import read_cs_files as cp
 
 logger = logging.getLogger(__name__)
 
-def tob3toa5(file_path, out_dir, prefix="TOA5py_", suffix="", decimals=3):
+def tob3toa5(file_path: str | Path, 
+             out_dir: str | Path, 
+             prefix: str = "TOA5py_",
+             suffix: str = "", 
+             decimals: int = 3) -> Path:
     """
     Reads a Campbell Scientific TOB3 file and converts it to a TOA5 format file.
     Works for both Slow (low frequency) and Sonic (high frequency) data.
     
-    Args:
+    Parameters:
         file_path (str or Path): The path to the input TOB3 file.
         out_dir (str or Path): The directory where the new file will be saved.
         prefix (str): Text to prepend to the original filename.
