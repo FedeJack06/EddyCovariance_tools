@@ -98,7 +98,7 @@ def despiking_series_robust(input_series: pd.Series,
     Applies a moving-window robust despiking algorithm directly to a pandas Series.
     If a record exceeds N times the robust standard deviation, it's marked as spike.
     
-    Detected spikes are replaced with the local running median. 
+    Detected spikes are replaced with NaN. 
 
     Parameters
     ----------
@@ -177,11 +177,59 @@ def despiking_series_robust(input_series: pd.Series,
         plt.show()
 
     # Replace bad data with the local median using .loc
-    timeseries.loc[spike_mask] = running_median.loc[spike_mask]
+    #timeseries.loc[spike_mask] = running_median.loc[spike_mask]
+
+    timeseries.loc[spike_mask] = np.nan
 
     return timeseries, count_spike
 
-def average_toa5(input_file, output_file, freq='10min'):
+def interpolate_lin(df: pd.DataFrame,
+                    limit: int) -> pd.DataFrame:
+    """
+    Linear interpolation on all df column.
+    Only fill NaNs surrounded by valid values (interpolate).
+    Limit set the maximum number of values to add during interpolation.
+    If there is 20 consecutive NaN and limit = 4, only 8 values are added,
+    4 starting from the far right of the range and 4 starting from the far left.
+
+    Parameters
+    ----------
+    df: dp.Dataframe
+        dataframe to interpolate
+    limit: int
+        Maximum number of consecutive NaNs to fill. Must be greater than 0.
+    """
+    df = df.interpolate(method='linear', limit=limit, limit_area='inside', limit_direction='both')
+    return df
+
+def interpolate_3pol(df: pd.DataFrame,
+                     limit: int) -> pd.DataFrame:
+    """
+    Interpolate all df column with third-degree polynomial.
+    Both interpolation and extrapolation are performed.
+    Limit set the maximum number of values to add during interpolation.
+    If there is 20 consecutive NaN and limit = 4, only 8 values are added,
+    4 starting from the far right of the range and 4 starting from the far left.
+
+    Parameters
+    ----------
+    df: dp.Dataframe
+        dataframe to interpolate
+    limit: int
+        Maximum number of consecutive NaNs to fill. Must be greater than 0.
+    """
+    df = df.interpolate(method='spline', order=3, limit=limit, limit_direction='both')
+    return df
+
+'''def fill_mean(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Fill NaN with the mean of the entire column
+    
+    """
+    df = df.fillna(df.mean())
+    return df'''
+
+'''def average_toa5(input_file, output_file, freq='10min'):
     """
     Reads a Campbell Scientific TOA5 file, averages the data based on a defined 
     time interval (freq), and exports it matching the original file structure.
@@ -228,11 +276,7 @@ def average_toa5(input_file, output_file, freq='10min'):
     # while numbers remain unquoted, perfectly matching the TOA5 standard.
     df_avg.to_csv(output_file, mode='a', header=False, index=True, 
                   date_format='%Y-%m-%d %H:%M:%S', 
-                  quoting=csv.QUOTE_NONNUMERIC)
-
-# --- EXAMPLE USAGE ---
-# average_toa5('slow_data.dat', 'slow_data_avg.dat', freq='1min')
-# average_toa5('fast_data.dat', 'fast_data_avg.dat', freq='10min')
+                  quoting=csv.QUOTE_NONNUMERIC)'''
 
 def check_TOA5(input_dir : str | Path,
                pattern: str,
@@ -279,7 +323,7 @@ def check_TOA5(input_dir : str | Path,
             df, meta = toa5_to_df(input_file=file, config=config, date_index=True)
 
             if df.empty:
-                logger.error(f"Analyzing {file}: empty file, skipping...")
+                logger.error(f"Analyzing {file.name}: empty file, skipping...")
                 continue
             
             # Comparison between last timestamp in previous file and first timestamp of current file
@@ -291,10 +335,10 @@ def check_TOA5(input_dir : str | Path,
                 if pd.notna(ts_prev) and pd.notna(ts_first):
                     dt_ms = (ts_first - ts_prev).total_seconds() * 1000 #dt in ms between files
                     if dt_ms > sampling_rate: # gap found
-                        logger.error(f"Time gap found between {last_file.name} and {file.name}: dt = {dt_ms/1000:.2f} s")
+                        logger.info(f"Time gap found between {last_file.name} and {file.name}: dt = {dt_ms/1000:.2f} s")
                         #append gap info to a list
                         row = pd.DataFrame({
-                            "file": [f"{last_file} → {file}"],
+                            "file": [f"{last_file.name} → {file.name}"],
                             "dtSec": [dt_ms / 1000]
                         })
                         df_gaps_list.append(row)
@@ -310,12 +354,12 @@ def check_TOA5(input_dir : str | Path,
             # Append rows with time gaps to a list
             if len(time_gaps_index) > 0:
                 row_with_gaps = pd.DataFrame({
-                            "file": [file],
+                            "file": [file.name],
                             "dtSec": delta_t[delta_t > sampling_rate].to_numpy()/1000,
                             "TIMESTAMP": df.index[delta_t > sampling_rate]
                         })
                 df_gaps_list.append(row_with_gaps)
-                logger.error(f"Analyzing {file}: Found {len(row_with_gaps)} rows with delta t > {sampling_rate} ms")
+                logger.info(f"Analyzing {file.name}: Found {len(row_with_gaps)} rows with delta t > {sampling_rate} ms")
             
             # Find rows with at least one NAN
             nan_df = df[df.eq('NAN').any(axis=1)]
@@ -327,39 +371,39 @@ def check_TOA5(input_dir : str | Path,
             last_file = file
 
         except Exception as e:
-            logger.error(f"Analyzing {file} Error: {e}")
+            logger.error(f"Analyzing {file.name} Error: {e}")
 
     # Output of the results
     info = meta[0].strip().split('","')
     # Build df
     if df_gaps_list:
         df_gaps = pd.concat(df_gaps_list, ignore_index=True)
-        logger.info(f"\n{'='*60}")
+        logger.info(f"{'='*60}")
         logger.info(f"TOTAL: {len(df_gaps)} rows with delta t > {sampling_rate} ms (include gaps between files)")
         logger.info(f"{'='*60}\n")
         logger.info(df_gaps)
         # result in a file named time_gaps
         if out_file:
-            out_path = input_dir / f'time_gaps_{info[1]}_{info[7][:-1]}.csv'
+            out_path = input_dir / Path(f'time_gaps_{info[1]}_{info[7][:-1]}.csv')
             df_gaps.to_csv(out_path, index=False)
     else:
-        logger.info(f"\n{'='*60}")
+        logger.info(f"{'='*60}")
         logger.info("No time gaps found.")
         logger.info(f"{'='*60}\n")
         df_gaps = pd.DataFrame()
 
     if df_nan_list:
         df_nan = pd.concat(df_nan_list, ignore_index=True)
-        logger.info("\n" + "="*60)
+        logger.info(f"{'='*60}")
         logger.info(f"TOTAL: {len(df_nan)} rows with NAN values")
         logger.info("="*60 + "\n")
         logger.info(df_nan)
         # result in a file named nan_
         if out_file:
-            out_path = input_dir / f'nan_{info[1]}_{info[7][:-1]}.csv'
+            out_path = input_dir / Path(f'nan_{info[1]}_{info[7][:-1]}.csv')
             df_nan.to_csv(out_path, index=False)
     else:
-        logger.info(f"\n{'='*60}")
+        logger.info(f"{'='*60}")
         logger.info("No NAN values found")
         logger.info(f"{'='*60}\n")
         df_nan = pd.DataFrame()
