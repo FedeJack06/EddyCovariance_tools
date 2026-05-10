@@ -5,7 +5,6 @@ from typing import Dict, List
 from pathlib import Path
 from .config import InputFileConfig, StationConfig
 from .file_manager import get_files_from_station, toa5_to_df
-from .pre_processing import filter_df_toa5
 
 logger = logging.getLogger(__name__)
 
@@ -79,9 +78,6 @@ def fill_db_toa5(con: db.DuckDBPyConnection,
     """
     for file in file_list:
         df, header = toa5_to_df(file, config=config)
-        
-        #remove 999.99 numbers, replaced with NAN
-        df = filter_df_toa5(df)
 
         #get the dictiocary that link the column name in the dataframe
         #and the column name in the table
@@ -125,3 +121,36 @@ def fill_db_station_toa5(con: db.DuckDBPyConnection,
         table_name = station.get_table_name(config_id)
         #fill the table with files of the same type
         fill_db_toa5(con=con, db_table=table_name, file_list=file_list, config=config)
+
+def get_df_from_db(db_path: str | Path,
+                   table: str,
+                   start_date: str,
+                   end_date: str) -> pd.DataFrame:
+    """
+    Get dataframe from a table between two date.
+
+    Parameters
+    ----------
+    db_path: str | Path
+        Path to input database file
+    table: str
+        Table name to be imported
+    start_date: str
+        First date to be selected
+    end_date: str
+        Last date to be selected
+
+    Returns
+    -------
+    pd.DataFrame
+        Dataframe version of the table selected, no datetime index
+    """
+    
+    with db.connect(db_path) as con:
+        # query select
+        query = "SELECT * FROM {} WHERE datetime BETWEEN ? AND ?"
+
+        # convert result into dataframe
+        df = con.execute(query.format(table), [start_date, end_date]).df()
+
+    return df
