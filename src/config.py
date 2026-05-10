@@ -24,12 +24,16 @@ class InputFileConfig:
     eddy covariance experiment.
     
     Attributes:
+        sampling_rate_ms: float: milliseconds between two measure.
+        n_levels: int: number of vertical levels or number of sonic instruments,
+                       recorded in the same file.
         cols: Dict[str, Tuple[type, str, str]]: Key is the name of the column in the input files.
               Value is a tuple contains in order, the pandas type of the column,
               the name of the column in the database table (can be different from file),
               the SQL type of the column in the table (used to create the table). 
     """
     sampling_rate_ms: float
+    n_levels: int
     cols: Dict[str, Tuple[type, str, str]]
 
     @classmethod
@@ -65,7 +69,8 @@ class InputFileConfig:
         # Create gill object
         return cls(
             cols = cols_gill_windmaster,
-            sampling_rate_ms = sampling_rate_ms
+            sampling_rate_ms = sampling_rate_ms,
+            n_levels = n_levels
         )
     
     @classmethod
@@ -98,7 +103,8 @@ class InputFileConfig:
 
         return cls(
             cols = cols_trh,
-            sampling_rate_ms = sampling_rate_ms
+            sampling_rate_ms = sampling_rate_ms,
+            n_levels = n_levels
         )
 
     @classmethod
@@ -120,7 +126,8 @@ class InputFileConfig:
 
         return cls( 
             cols = cols_status,
-            sampling_rate_ms = sampling_rate_ms
+            sampling_rate_ms = sampling_rate_ms,
+            n_levels = None
         )
     
     def get_file_cols_name(self) -> List[str]:

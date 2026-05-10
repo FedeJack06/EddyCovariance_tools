@@ -130,13 +130,76 @@ def fill_gaps_nan(df: pd.DataFrame,
     df_reindexed.index.name = df.index.name
     return df_reindexed
 
+def plausibility_filter(input_series: pd.Series,
+                        lower_limit: float,
+                        upper_limit: float,
+                        show_plot: bool = False) -> Tuple[pd.Series, int]:
+    """
+    Replace values out of limits with NaN
+    Values into [lower_limit, upper_limit] are retained (limits included).
+
+    Parameters
+    ----------
+    input_series : pd.Series
+        Input time series data, with a DatetimeIndex (optional)
+    lower_limit: float
+        Lower value to be retained
+    upper_limit: float
+        Higher value to be retained
+    show_plot : bool, optional
+        If True, displays a plot showing the original series, the dynamic bounds, 
+        and the identified spikes. Default is False.
+
+    Returns
+    -------
+    pd.Series
+        The cleaned series.
+    int
+        The number of values removed.
+    """
+    # define the mask to be retained
+    mask_ok = (input_series >= lower_limit) & (input_series <= upper_limit)
+    # replace values out of range with NaN
+    out_series = input_series.where(mask_ok)
+
+    # number of values out of range, exclude NaN already present
+    n_out_of_range = (~mask_ok & input_series.notna()).sum()
+
+    # Visualize spikes and temporal series
+    if show_plot:
+        plt.figure(figsize=(14, 6))
+        
+        # input series in grey
+        plt.plot(input_series.index, input_series, label='Input series', color='black', alpha=0.5, linewidth=1)
+        
+        # tolerance band
+        plt.fill_between(input_series.index, lower_limit, upper_limit, color='blue', alpha=0.1, label='Plausibility range')
+        
+        plt.ylim([input_series.min()-abs(input_series.min())*0.05, input_series.max()+abs(input_series.max())*0.05])
+        # out of range red dot
+        out_of_range = input_series[~mask_ok]
+        plt.scatter(out_of_range.index, out_of_range, color='red', label='out of range', zorder=5, s=20)
+        
+        plt.title(f'Out of range detected: {n_out_of_range}', fontsize=14)
+        plt.xlabel('Timestamp', fontsize=12)
+        plt.ylabel('Value', fontsize=12)
+        plt.legend(loc='best')
+        plt.grid(True, linestyle='--', alpha=0.6)
+        plt.tight_layout()
+        plt.show()
+
+    return out_series, n_out_of_range
+
 def despiking_series_robust(input_series: pd.Series, 
                             robust_std_dev: float, 
-                            n_window_points: int, 
+                            n_window_points: int,
+                            max_consecutive_spikes: int,
                             show_plot: bool = False) -> Tuple[pd.Series, int]:
     """
     Applies a moving-window robust despiking algorithm directly to a pandas Series.
     If a record exceeds N times the robust standard deviation, it's marked as spike.
+    Only consecutive values out of range shorter or equal max_consecutive_spikes
+    ere removed and considered spikes.
     
     Detected spikes are replaced with NaN. 
 
@@ -148,6 +211,9 @@ def despiking_series_robust(input_series: pd.Series,
         Threshold multiplier for the robust standard deviation.
     n_window_points : int
         Number of periods for the rolling window.
+    max_consecutive_spikes: int
+        Are considered spikes only a number of consecutive values less or equal.
+        Consecutive values out of bounds longer than this parameters are retained.
     show_plot : bool, optional
         If True, displays a plot showing the original series, the dynamic bounds, 
         and the identified spikes. Default is False.
@@ -171,41 +237,53 @@ def despiking_series_robust(input_series: pd.Series,
 
     timeseries = input_series.copy()
 
-    # --- Rolling Statistics using Pandas ---
+    # rolling window
     roll = timeseries.rolling(window=n_window_points, center=True, min_periods=1)
     
     running_median = roll.median()
     p84 = roll.quantile(0.84)
     p16 = roll.quantile(0.16)
     
-    # definition of robust standard deviation
+    # robust standard deviation
     running_std_robust = 0.5 * (p84 - p16)
 
-    # --- Spike Detection and Replacement ---
+    # spike if max between 0.5 (when low variation) and robust std dev
     delta = np.maximum(robust_std_dev * running_std_robust, 0.5)
 
     upper_bound = running_median + delta
     lower_bound = running_median - delta
 
-    # Create boolean mask for spikes 
+    # mask of spikes 
     spike_mask = (timeseries > upper_bound) | (timeseries < lower_bound)
-    count_spike = int(spike_mask.sum())
+    #count_spike = int(spike_mask.sum())
+
+    # find consecutive spike groups
+    spike_groups = (spike_mask != spike_mask.shift()).cumsum()
+    spike_group_size = spike_mask.groupby(spike_groups).transform('sum')
+
+    # keep spikes that are part of a consecutive run longer than max allowed
+    keep_mask = spike_mask & (spike_group_size > max_consecutive_spikes)
+
+    # spikes to replace with NaN
+    final_spike_mask = spike_mask & ~keep_mask
+
+    count_spike = int(final_spike_mask.sum())
 
     # Visualize spikes and temporal series
     if show_plot:
         plt.figure(figsize=(14, 6))
         
         # input series in grey
-        plt.plot(input_series.index, input_series, label='Input series', color='gray', alpha=0.5, linewidth=1)
+        plt.plot(input_series.index, input_series, label='Input series', color='black', alpha=0.5, linewidth=1)
         
         # tolerance band
         plt.fill_between(input_series.index, lower_bound, upper_bound, color='blue', alpha=0.1, label='Tolerance band')
         
         # despiked series in blue
-        plt.plot(timeseries.index, timeseries.where(~spike_mask, running_median), label='Despiked series', color='blue', linewidth=1.5)
+        plt.plot(timeseries.index, timeseries.where(~final_spike_mask, running_median), label='Despiked series', color='blue', linewidth=0.3)
         
         # spikes red dot
-        spikes_only = input_series[spike_mask]
+        spikes_only = input_series[final_spike_mask]
         plt.scatter(spikes_only.index, spikes_only, color='red', label='Spike value', zorder=5, s=20)
         
         plt.title(f'Robust despike (Spike removed: {count_spike})', fontsize=14)
@@ -219,7 +297,8 @@ def despiking_series_robust(input_series: pd.Series,
     # Replace bad data with the local median using .loc
     #timeseries.loc[spike_mask] = running_median.loc[spike_mask]
 
-    timeseries.loc[spike_mask] = np.nan
+    #timeseries.loc[spike_mask] = np.nan
+    timeseries[final_spike_mask] = np.nan
 
     return timeseries, count_spike
 
