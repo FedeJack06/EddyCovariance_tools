@@ -11,11 +11,13 @@ logger = logging.getLogger(__name__)
 def df_to_db(con: db.DuckDBPyConnection, 
              df_in: pd.DataFrame, 
              db_table: str, 
-             map_df_db_cols: Dict[str, str]):
+             map_df_db_cols: Dict[str, str] = None):
     """
     Fill a database table with a Pandas dataframe.
     You must specify a relation between the column names 
     in the dataframe and the column names in the table.
+    If you don't pass the relation, all df columns are
+    inserted into the database, with the same name.
 
     Parameters
     ----------
@@ -34,26 +36,28 @@ def df_to_db(con: db.DuckDBPyConnection,
     Number of rows inserted
     """
 
-    #put the column name in the dataframe and in the table in two list
-    #same list index identifies a pair
-    table_cols = []
-    df_cols = []
-    for key, value in map_df_db_cols.items():
-        df_cols.append(key)
-        table_cols.append(value)
+    if map_df_db_cols is not None:
+        #put the column name in the dataframe and in the table in two list
+        #same list index identifies a pair
+        table_cols = []
+        df_cols = []
+        for key, value in map_df_db_cols.items():
+            df_cols.append(key)
+            table_cols.append(value)
 
-    #query to insert dataframe rows into a table
-    query = f"""
-        INSERT INTO {db_table} ({", ".join(table_cols)})
-        SELECT {", ".join(df_cols)} FROM df_in
-    """
+        #query to insert dataframe rows into a table
+        query = f"""
+            INSERT INTO {db_table} ({", ".join(table_cols)})
+            SELECT {", ".join(df_cols)} FROM df_in
+        """
+    else: #insert all df column into table
+        query = f"INSERT INTO {db_table} SELECT * FROM df_in"
+
     try:
         #get the number of inserted rows
         inserted_rows = con.execute(query).fetchone()[0]
         return inserted_rows
     except db.Error as e:
-        # Non gestiamo il log qui, ma "rilanciamo" l'errore per farlo gestire a chi chiama la funzione.
-        # Questa è un'ottima pratica ("don't be overly defensive").
         raise
 
 def fill_db_toa5(con: db.DuckDBPyConnection, 
@@ -122,6 +126,14 @@ def fill_db_station_toa5(con: db.DuckDBPyConnection,
         #fill the table with files of the same type
         fill_db_toa5(con=con, db_table=table_name, file_list=file_list, config=config)
 
+def db_to_df(db_path: str | Path,
+             table: str) -> pd.DataFrame:
+    """Get all db table into a Pandas df"""
+    
+    with db.connect(db_path) as con:
+        df = con.execute(f"SELECT * FROM {table}").df()
+    return df
+
 def get_df_from_db(db_path: str | Path,
                    table: str,
                    start_date: str,
@@ -152,5 +164,42 @@ def get_df_from_db(db_path: str | Path,
 
         # convert result into dataframe
         df = con.execute(query.format(table), [start_date, end_date]).df()
+
+    return df
+
+def select_db_dates(db_path: str | Path,
+                   table: str,
+                   dates: List) -> pd.DataFrame:
+    """
+    Get dataframe from a table from some intervals.
+
+    Parameters
+    ----------
+    db_path: str | Path
+        Path to input database file
+    table: str
+        Table name to be imported
+    dates: List
+        List of tuple, containing all the interval to be selected
+
+    Returns
+    -------
+    pd.DataFrame
+        Dataframe version of the table selected, no datetime index
+    """
+
+    # query select
+    query = "SELECT * FROM {} WHERE "
+    params = []
+    for el in dates:
+        query = query + "(datetime BETWEEN ? AND ?) OR "
+        params.append(el[0])
+        params.append(el[1])
+    # remove last "OR "
+    query = query[:-3]
+    
+    with db.connect(db_path) as con:
+        # convert result into dataframe
+        df = con.execute(query.format(table), params).df()
 
     return df
