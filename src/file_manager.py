@@ -114,55 +114,12 @@ def csv_to_df(input_file : str | Path,
         df.drop(columns=[index], inplace=True, errors='ignore')
 
     return df
-    
-def get_files_substring(folder_path: str | Path,
-                        substring: str) -> List[Path]:
-    """
-    Get a sorted list of files from a folder. The name of the files
-    must contains the substring passed.
-    The search is case-insensitive.
-    The files are returned as List of file as Path object.
-
-    Parameters
-    ----------
-    folder_path: str or Path
-        Serach is perfomed in this path.
-    substring: str
-        Substring contained in the name of the searched files.
-
-    Returns
-    -------
-    List[Path]
-        A list of files (Path object).
-    """
-    #if string, convert to Path object
-    folder = Path(folder_path)
-
-    if not folder.exists() or not folder.is_dir():
-        logger.error(f"Error: folder {folder} not found or is not a directory.")
-        return []
-    
-    try:
-        #get a list of only file in folder
-        files = [
-            f for f in folder.iterdir()
-            if f.is_file() and substring.lower() in f.name.lower()
-        ]
-        
-        #order A -> Z
-        files.sort()
-        
-        logger.info(f"Found {len(files)} files matching '*{substring}*' in {folder}.")
-        return files
-        
-    except Exception as e:
-        logger.error(f"Error reading folder {folder}: {e}")
-        return []
 
 def get_files_pattern(folder_path: str | Path,
-                      pattern: str) -> List[Path]:
+                      pattern: str,
+                      sorted: bool = False) -> List[Path]:
     """
-    Get a sorted list of files from a folder matching a wildcard pattern.
+    Get a list of files from a folder matching a wildcard pattern.
     You can use "*" to substitute any char.
     The search is CASE-SENSITIVE.
 
@@ -172,6 +129,8 @@ def get_files_pattern(folder_path: str | Path,
         Search is performed in this path.
     pattern: str
         Wildcard pattern to match (e.g., 'TOA5py_Sonic*.dat').
+    sorted: bool = False
+        If true return a sorted list of files using natsort library
 
     Returns
     -------
@@ -188,8 +147,11 @@ def get_files_pattern(folder_path: str | Path,
     try:
         # Find only files, based on a wildcard pattern
         # sorted based on filename
-        files = natsorted([f for f in folder.glob(pattern) if f.is_file()], 
+        if sorted:
+            files = natsorted([f for f in folder.glob(pattern) if f.is_file()], 
                           key=lambda f: f.name)
+        else:
+            files = [f for f in folder.glob(pattern) if f.is_file()]
         
         logger.info(f"Found {len(files)} files matching '{pattern}' in {folder}.")
         return files
@@ -197,15 +159,16 @@ def get_files_pattern(folder_path: str | Path,
     except Exception as e:
         logger.error(f"Error reading folder {folder}: {e}")
         return []
-    
-def get_files_from_station(folder_path: str, 
-                           station: StationConfig) -> Dict[str, List]:
+
+def get_files_from_station(folder_path: str | Path, 
+                           station: StationConfig,
+                           configs: List[str] = None) -> Dict[str, List[Path]]:
     """
-    Gets all the files related to one station. One search is performed
-    for each InputFileConfig object in the StationConfig.
+    Gets all the input files related to one station. One search is performed
+    for every InputFileConfig object in the configs list.
     Returns a dictionary, with a list of files for each 
-    InputFileConfig of the station.
-    The files are returned as String with their relative path.
+    InputFileConfig of the station selected.
+    The files are returned as a Path object.
 
     Parameters
     ----------
@@ -213,15 +176,18 @@ def get_files_from_station(folder_path: str,
         Serach is perfomed in this path.
     station: StationConfig
         Station object conaining all the input file configuration.
+        Only files related to config_id selected are searched.
         Only files containing the "input_files_name" in the filename are selected.
-        Serch string case-insensitive
+        Serch string case-insensitive and result not sorted
+    configs: List[str] = None
+        The id of the configuretion to be imported.
+        Default is None: get files from all config in the station
 
     Returns
     ----------
-    Dict[str, List]
+    Dict[str, List[Path]]
         Return a dictionary of list of files. 
-        Key is the config ID, value is the related list of input files,
-        with their relative path.
+        Key is the config ID, value is a list of files Path object.
 
     """
     if not isinstance(station, StationConfig):
@@ -230,13 +196,18 @@ def get_files_from_station(folder_path: str,
     #dictionary: key is the config_id, value is the related list of files
     dict_files = {}
 
-    #get all the substrings to search files
-    files_substring = station.input_files_name
-    for config_id, substring in files_substring.items():
-        #get the list of files of the same type (the same input config)
-        list_of_file = get_files_pattern(folder_path=folder_path, pattern=substring)
-        #output
-        dict_files[config_id] = list_of_file
+    # if no config id passed, seach files for all configs object in the station
+    keys = configs if configs is not None else station.input_files_name.keys()
+
+    for config_id in keys:
+        try:
+            substring = station.get_input_file_name(config_id)
+            #get the list of files of the same type (the same input config)
+            list_of_file = get_files_pattern(folder_path=folder_path, pattern=substring)
+            #output
+            dict_files[config_id] = list_of_file
+        except KeyError as e:
+            logger.error(f"Config id error: {e}")
 
     return dict_files
 

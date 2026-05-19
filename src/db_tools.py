@@ -96,14 +96,16 @@ def fill_db_toa5(con: db.DuckDBPyConnection,
 
 def fill_db_station_toa5(con: db.DuckDBPyConnection, 
                     station: StationConfig, 
-                    input_dir: str) -> None:
+                    input_dir: str,
+                    configs: List[str] = None) -> None:
     """
-    Fills the database with all the files produced by a station.
+    Fills the database with the files produced by a station.
     StationConfig object is used to put different file types into
     the correct database tables. A table corresponds to a file type,
     and it is filled only with files of the same type.
     Different type of files can be in the same directory. They are sorted
     based on the substring in their name, specified in the station configuration.
+    Only file type listed in config parameter will be inseted into db.
 
     Parameters
     ----------
@@ -113,10 +115,13 @@ def fill_db_station_toa5(con: db.DuckDBPyConnection,
         Station object conaining all the input file configuration
     input_dir: str
         Directory containing all the files produced by the station.
+    configs: List[str] = None
+        List of id of InputFileConfig in the station, to insert into database.
+        If None, all InputFileConfig of station will be inseted.
     """
     #get a dict with the input configuration id as key and
     #the list of related files as value
-    all_station_files = get_files_from_station(folder_path = input_dir, station=station)
+    all_station_files = get_files_from_station(input_dir, station, configs)
 
     for config_id, file_list in all_station_files.items():
         #get the InputFileConfig object based on its id
