@@ -10,7 +10,7 @@ from src.file_manager import get_files_pattern
 setup_logging(__file__)
 
 # input directory and files
-working_dir = "./data"
+working_dir = "./data/station_26458"
 pattern = "S*"
 
 files = get_files_pattern(folder_path=working_dir, pattern=pattern)

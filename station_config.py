@@ -1,3 +1,9 @@
+"""
+File with an example of configuration of two stations.
+Two stations with the same sensors but with different number
+of vertical levels.
+"""
+
 from src.config import InputFileConfig, StationConfig
 
 # --- CONFIG the input file type ---
@@ -32,20 +38,20 @@ s_4175 = StationConfig(
 s_4175.add_input_file_config(config_id="sonic", 
                              config=gill_1, 
                              db_table_name="sonic_4175", 
-                             input_files_name="TOA5py_4175_sonic*")
+                             input_files_name="TOA5py_Sonic*")
 s_4175.add_input_file_config(config_id="slow", 
                              config=trh_1, 
                              db_table_name="slow_4175", 
-                             input_files_name="TOA5py_4175_slow*")
+                             input_files_name="TOA5py_Slow*")
 s_4175.add_input_file_config(config_id="stat", 
                              config=stat_info, 
                              db_table_name="stat_4175", 
-                             input_files_name="TOA5py_4175_stat*")
+                             input_files_name="TOA5py_Stat*")
 
 #a station with 2 vertical levels
 s_26458 = StationConfig(
     station_name="26458"
 )
-s_26458.add_input_file_config("sonic", gill_2, "sonic_26458", "TOA5py_26458_sonic*")
-s_26458.add_input_file_config("slow", trh_2, "slow_26458", "TOA5py_26458_slow*")
-s_26458.add_input_file_config("stat", stat_info, "stat_26458", "TOA5py_26458_stat*")
+s_26458.add_input_file_config("sonic", gill_2, "sonic_26458", "TOA5py_Sonic*")
+s_26458.add_input_file_config("slow", trh_2, "slow_26458", "TOA5py_Slow*")
+s_26458.add_input_file_config("stat", stat_info, "stat_26458", "TOA5py_Stat*")
