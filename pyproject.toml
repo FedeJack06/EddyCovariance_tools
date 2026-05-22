@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "EddyCovTools"
+version = "0.0.1"
+authors = [
+  { name="Federico Giacobbe", email="fedejek06@gmail.com" },
+]
+description = "Python tools to analyze and filter high sampling rate Sonic Anemometer and Thermohygrometer measurements. A clean way to build a database directly from station files and look at your data. Convert Campbell TOB3 file. Despiking method. Rotation-to-streamline methods. "
+readme = "README.md"
+requires-python = ">=3.6"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "GPL-3.0"
+license-files = ["LICEN[CS]E*"]
+dependencies = [
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "duckdb",
+    "campbell-files",
+    "natsort"
+]
+
+[project.urls]
+Homepage = "https://github.com/FedeJack06/EddyCovariance_tools"
+Issues = "https://github.com/FedeJack06/EddyCovariance_tools/issues"

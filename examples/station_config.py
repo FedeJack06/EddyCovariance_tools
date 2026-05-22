@@ -4,7 +4,7 @@ Two stations with the same sensors but with different number
 of vertical levels.
 """
 
-from src.config import InputFileConfig, StationConfig
+from EddyCovTools.config import InputFileConfig, StationConfig
 
 # --- CONFIG the input file type ---
 #file type produced by one sonic anemometer

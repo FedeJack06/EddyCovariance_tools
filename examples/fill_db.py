@@ -8,20 +8,17 @@ and inserts them into the appropriate database tables. The file types for each s
 and the corresponding table are specified in the station configuration.
 
 Here is an example of two different stations: one with a single vertical measurement level 
-(and thus one instrument and one file per type) and one station with two vertical levels.
+and thus one instrument and one file per type) and one station with two vertical levels.
 """
 
 import duckdb as db
 from pathlib import Path
-from src.utils import setup_logging
-from src.db_tools import fill_db_station_toa5
+from EddyCovTools.utils import setup_logging
+from EddyCovTools.db_tools import fill_db_station_toa5
+from station_config import * # import station configuration
 
 # create a .log file with all the errors
 setup_logging(__file__)
-
-#################################################################
-# --- CONFIG ---
-from station_config import *
 
 #################################################################
 # --- FILL DB PIPELINE ---
