@@ -3,7 +3,7 @@ Script for create a database structure with tables for each stations
 as described into the configuration objects.
 """
 
-from station_config import *
+from .station_config import *
 import duckdb as db
 
 database = "./data/database.db"

@@ -8,7 +8,17 @@ If you are using a Campbell datalogger, you can convert Campbell TOB3 file, than
 
 It will contain despiking method and rotation-to-streamline methods.
 
-NB:  git submodule update --init --recursive
+It is available as PyPi package under name EddyCovTools
+Install using
+```bash
+python3 -m pip install EddyCovTools
+```
+
+If you want to investigate the TOB3 file converter, use
+```bash
+git submodule update --init --recursive
+```
+to get my fork.
 
 This repo is a work in progress.
 
@@ -19,3 +29,4 @@ Required:
 - numpy
 - duckdb
 - natsort
+- campbell-files

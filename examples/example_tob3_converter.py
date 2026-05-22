@@ -2,9 +2,9 @@
 Script to convert all TOB3 files from a directory to TOA5 files.
 TOA5 will be saved in the same folder, adding "TOA5py_" suffix in the name.
 """
-from src.tob3_to_toa5 import tob3toa5
-from src.utils import setup_logging
-from src.file_manager import get_files_pattern
+from EddyCovTools.tob3_to_toa5 import tob3toa5
+from EddyCovTools.utils import setup_logging
+from EddyCovTools.file_manager import get_files_pattern
 
 # create a .log file with all the errors
 setup_logging(__file__)

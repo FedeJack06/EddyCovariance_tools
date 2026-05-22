@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 import csv
 from datetime import datetime
-from .campbell import read_cs_files as cp
+from campbell_files import read_cs_files
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def tob3toa5(file_path: str | Path,
 
     # Read file raw from campbell datalogger
     try:
-        data, meta = cp.read_cs_files(file_path, quiet=False, bycol=False)
+        data, meta = read_cs_files(file_path, quiet=False, bycol=False)
     except Exception as e:
         logger.error(f"Error reading {file_path}: {e}.")
         return None
