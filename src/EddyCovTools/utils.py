@@ -18,7 +18,7 @@ def setup_logging(log_filename: str):
 
     # Handler for errors (Aggiunto mode='w' per forzare la sovrascrittura)
     error_handler = logging.FileHandler(log_filename, mode='w')
-    error_handler.setLevel(logging.ERROR)
+    error_handler.setLevel(logging.WARNING)
     error_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(message)s'))
 
     # Handler for standard output (terminal)
